@@ -62,7 +62,7 @@
     int query_id = cur_lt();
     if(op == 0) { ;; message with text comment
         throw_unless(error::unknown_op,
-            equal_slice_bits(in_msg_body, "approve") &
+            equal_slices_bits(in_msg_body, "approve") &
                  ( in_msg_body.slice_refs() == 0));
         ;; lets find signer in the signers dict
         slice index_slice = "fff";
@@ -70,7 +70,7 @@
         do {
             (index_slice, slice value, int found?) = signers.dict_get_prev?(INDEX_SIZE, index_slice);
             if(found?) {
-                if (equal_slice_bits(sender, value)) {
+                if (equal_slices_bits(sender, value)) {
                     found? = false;
                     found_signer? = true;
                     ;; below, in (op == op::approve) we will read in_msg_body to find index
@@ -87,7 +87,7 @@
 
     int check_threshold? = false;
     if(op == op::init) {
-        throw_unless(error::unauthorized_init, equal_slice_bits(sender, multisig));
+        throw_unless(error::unauthorized_init, equal_slices_bits(sender, multisig));
         throw_unless(error::already_inited, null?(threshold));
         ;; Let's init
         threshold = in_msg_body~load_index();
@@ -124,7 +124,7 @@
             int signer_index = in_msg_body~load_index();
             (slice signer, int found?) = signers.udict_get?(INDEX_SIZE, signer_index);
             throw_unless(error::unauthorized_sign, found?);
-            throw_unless(error::unauthorized_sign, equal_slice_bits(sender, signer));
+            throw_unless(error::unauthorized_sign, equal_slices_bits(sender, signer));
 
             (approvals, approvals_num) ~add_approval(signer_index);
             check_threshold? = true;

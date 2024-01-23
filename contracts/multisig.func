@@ -94,7 +94,7 @@ cell proposers) impure {
         cell order_body = in_msg_body~load_ref();
         (slice expected_address, int found?) = (signer? ? signers : proposers).udict_get?(8, index);
         throw_unless(error::unauthorized_new_order, found?);
-        throw_unless(error::unauthorized_new_order, equal_slice_bits(sender, expected_address));
+        throw_unless(error::unauthorized_new_order, equal_slices_bits(sender, expected_address));
         throw_unless(error::expired, expiration_date >= now());
 
 
@@ -132,7 +132,7 @@ cell proposers) impure {
         cell state_init = calculate_order_state_init(my_address(), order_seqno);
         slice order_address = calculate_address_by_state_init(BASECHAIN, state_init);
 
-        throw_unless(error::unauthorized_execute, equal_slice_bits(sender, order_address));
+        throw_unless(error::unauthorized_execute, equal_slices_bits(sender, order_address));
         throw_unless(error::singers_outdated, (signers_hash == signers.cell_hash()) & (approvals_collected >= threshold));
         throw_unless(error::expired, expiration_date >= now());
 
@@ -141,7 +141,7 @@ cell proposers) impure {
         ;; we always trust ourselves, this feature is used to make chains of executions
         ;; where last action of previous execution triggers new one.
 
-        throw_unless(error::unauthorized_execute, equal_slice_bits(sender, my_address()));
+        throw_unless(error::unauthorized_execute, equal_slices_bits(sender, my_address()));
         cell order_body = in_msg_body~load_ref();
         (threshold, signers, signers_num, proposers)~execute_order(order_body);
     }
