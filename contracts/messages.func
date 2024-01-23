@@ -1,3 +1,6 @@
+#include "imports/stdlib.fc";
+#include "types.func";
+
 ;; int_msg_info$0 ihr_disabled:Bool bounce:Bool bounced:Bool src:MsgAddress -> 011000
 const int msgflag::NON_BOUNCEABLE = 0x10;
 const int msgflag::BOUNCEABLE = 0x18;

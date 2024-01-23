@@ -1,3 +1,5 @@
+#include "imports/stdlib.fc";
+
 ;; general
 (slice, (int)) ~load_timestamp(slice s) inline { return s.load_uint(48); }
 builder store_timestamp(builder b, int timestamp) inline { return b.store_uint(timestamp, 48); }
