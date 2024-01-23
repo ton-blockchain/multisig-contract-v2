@@ -39,34 +39,6 @@ builder store_msgbody_prefix_ref(builder b, cell ref) inline {
     return b.store_uint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1).store_ref(ref);
 }
 
-{-
-
-addr_std$10 anycast:(Maybe Anycast) 
-   workchain_id:int8 address:bits256  = MsgAddressInt;
--}
-
-builder store_masterchain_address(builder b, int address_hash) inline {
-  return b.store_uint(4, 3).store_workchain(MASTERCHAIN).store_uint(address_hash, 256);
-}
-
-
-() send_msg(slice to_address, int amount, cell payload, int flags, int send_mode) impure inline_ref {
-    int has_payload = ~ cell_null?(payload);
-
-    builder msg = begin_cell()
-        .store_msg_flags(flags)
-        .store_slice(to_address)
-        .store_coins(amount);
-
-    if (has_payload) {
-        msg = msg.store_msgbody_prefix_ref(payload);
-    } else {
-        msg = msg.store_msgbody_prefix_slice();
-    }
-
-    send_raw_message(msg.end_cell(), send_mode);
-}
-
 () send_msg_builder(slice to_address, int amount, builder payload, int flags, int send_mode) impure inline_ref {
     int payload_length = payload.null?() ? 0 : payload.builder_bits();
 
@@ -103,35 +75,3 @@ builder store_masterchain_address(builder b, int address_hash) inline {
 
     send_raw_message(msg.end_cell(), send_mode);
 }
-
-() send_excesses(slice sender_address) impure inline_ref {
-    send_msg(
-      sender_address,
-      0, ;; value
-      null(),
-      msgflag::NON_BOUNCEABLE,
-      sendmode::CARRY_ALL_REMAINING_MESSAGE_VALUE | sendmode::IGNORE_ERRORS); ;; non-bouneable, remaining inbound message amount, fee deducted from amount, ignore errors
-}
-
-
-
-() emit_log (int topic, builder data) impure inline {
-    ;; 1023 - (4+2+9+256+64+32+2) = 654 bit free
-
-    var msg = begin_cell()
-            .store_uint (12, 4)         ;; ext_out_msg_info$11 src:MsgAddressInt ()
-            .store_uint (1, 2)          ;; addr_extern$01
-            .store_uint (256, 9)        ;; len:(## 9)
-            .store_uint(topic, 256); ;; external_address:(bits len)
-
-    if (data.builder_bits() > 1023 - (4 + 2 + 9 + 256 + 64 + 32 + 2) ) {
-        msg = msg.store_uint(1, 64 + 32 + 2) ;; created_lt, created_at, init:Maybe, body:Either
-                .store_ref(begin_cell().store_builder(data).end_cell());
-    } else {
-        msg = msg.store_uint(0, 64 + 32 + 2) ;; created_lt, created_at, init:Maybe, body:Either
-                .store_builder(data);
-    }
-
-    send_raw_message(msg.end_cell(), sendmode::REGULAR);
-}
-

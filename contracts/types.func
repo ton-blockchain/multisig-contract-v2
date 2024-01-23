@@ -12,7 +12,6 @@ builder store_bool(builder b, int flag) inline { return b.store_int(flag, 1); }
 builder store_hash(builder b, int hash) inline { return b.store_uint(hash, 256); }
 
 
-(slice, (int)) ~load_workchain(slice s) inline { return s.load_int(8); }
 builder store_workchain(builder b, int wc) inline { return b.store_int(wc, 8); }
 const int MASTERCHAIN = -1;
 const int BASECHAIN = 0;
@@ -27,14 +26,9 @@ const int BASECHAIN = 0;
     return (s, (op, query_id));
 }
 
-
-(slice, ()) ~skip_bounce(slice s) inline { s~skip_bits(32); return (s, ());}
-
-builder store_op(builder b, int op) inline { return b.store_uint(op, 32); }
-builder store_query_id(builder b, int query_id) inline { return b.store_uint(query_id, 64); }
 builder store_body_header(builder b, int op, int query_id) inline {
     return b.store_uint(op, 32)
-            .store_uint(query_id, 64);
+    .store_uint(query_id, 64);
 }
 
 ;; Multisig types
