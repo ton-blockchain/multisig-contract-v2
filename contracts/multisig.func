@@ -5,8 +5,6 @@
 #include "messages.func";
 #include "order_helpers.func";
 
-(cell -> cell) prepare_guard_execution(cont c) asm "NOP";
-
 int validate_dictionary_sequence(cell dict) impure {
     int index = -1;
     int expected_index = 0;
