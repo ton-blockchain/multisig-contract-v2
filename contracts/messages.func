@@ -8,6 +8,7 @@ const int msgflag::BOUNCEABLE = 0x18;
 const int sendmode::REGULAR = 0;
 const int sendmode::PAY_FEES_SEPARETELY = 1;
 const int sendmode::IGNORE_ERRORS = 2;
+const int sendmode::BOUNCE_ON_ACTION_FAIL = 16;
 const int sendmode::DESTROY = 32;
 const int sendmode::CARRY_ALL_REMAINING_MESSAGE_VALUE = 64;
 const int sendmode::CARRY_ALL_BALANCE = 128;

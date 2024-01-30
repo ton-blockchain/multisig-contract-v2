@@ -115,7 +115,7 @@ cell proposers) impure {
             state_init,
             init_body,
             msgflag::BOUNCEABLE,
-            sendmode::CARRY_ALL_REMAINING_MESSAGE_VALUE);
+            sendmode::CARRY_ALL_REMAINING_MESSAGE_VALUE | sendmode::BOUNCE_ON_ACTION_FAIL);
         next_order_seqno += 1;
     } elseif(op == op::execute) {
         ;; check that sender is order smart-contract and check that it has recent

@@ -25,47 +25,17 @@ slice calculate_address_by_state_init(int workchain, cell state_init) inline {
             .begin_parse();
 }
 
-const int CONFIG::storage_prices = 18;
-const int CONFIG::basechain_gas_prices = 21;
-const int CONFIG::basechain_fwd_prices = 25;
-
-
-(int, int, int, int, int, int, int, int) get_fee_constants() {
-    cell storage_config = config_param(CONFIG::storage_prices);
-    ;; lets get latest prices
-    (int timestamp, slice storage_slice, int found?) = storage_config.udict_get_max?(32);
-    storage_slice~skip_bits(32 + 8); ;; skip constructor byte and utime_since
-    (int bit_price_ps, int cell_price_ps) = (storage_slice~load_uint(64), storage_slice~load_uint(64));
-    
-    slice gas_config = config_param(CONFIG::basechain_gas_prices).begin_parse();
-    gas_config~skip_bits(8); ;;gas_flat_pfx tag
-    (int flat_gas_limit, int flat_gas_price) = (gas_config~load_uint(64), gas_config~load_uint(64));
-    gas_config~skip_bits(8); ;;gas_prices tag
-    (int gas_price) = (gas_config~load_uint(64));
-    
-    slice fwd_config = config_param(CONFIG::basechain_fwd_prices).begin_parse().skip_bits(8); ;; skip tag
-    (int lump_price, int bit_price, int cell_price) = (fwd_config~load_uint(64), fwd_config~load_uint(64), fwd_config~load_uint(64));
-    
-   return (bit_price_ps, cell_price_ps, flat_gas_limit, flat_gas_price, gas_price, lump_price, bit_price, cell_price);
-}
-
-const int MULTISIG_INIT_ORDER_GAS = 16861; ;; 255 signers
-const int ORDER_INIT_GAS = 5128;
-const int ORDER_EXECUTE_GAS = 10075;
-const int MULTISIG_EXECUTE_GAS = 9042; ;; For single transfer action order
+const int MULTISIG_INIT_ORDER_GAS = 11603; ;; 255 signers
+const int ORDER_INIT_GAS = 5153;
+const int ORDER_EXECUTE_GAS = 10108;
+const int MULTISIG_EXECUTE_GAS = 8992; ;; For single transfer action order
 ;; we call number of bits/cells without order bits/cells as "overhead"
-const int INIT_ORDER_BIT_OVERHEAD = 5166;
+const int INIT_ORDER_BIT_OVERHEAD = 5172;
 const int INIT_ORDER_CELL_OVERHEAD = 21;
-const int ORDER_STATE_BIT_OVERHEAD = 5597;
+const int ORDER_STATE_BIT_OVERHEAD = 5603;
 const int ORDER_STATE_CELL_OVERHEAD = 21;
 const int EXECUTE_ORDER_BIT_OVERHEAD = 440;
 const int EXECUTE_ORDER_CELL_OVERHEAD = 1;
-
-int flat_gas_wrapper(int flat_gas_limit, int flat_gas_price, int gas_price, int gas) {
-    ;; Gas calculation: https://github.com/ton-blockchain/ton/blob/51baec48a02e5ba0106b0565410d2c2fd4665157/crypto/block/transaction.cpp#L1124
-    int flat_part = min(gas, flat_gas_limit);
-    return flat_gas_price + ((gas - flat_part) * gas_price ^/ 65536);
-}
 
 int calculate_order_processing_cost(cell order_body, int duration) {
     {- There are following costs:
@@ -77,31 +47,22 @@ int calculate_order_processing_cost(cell order_body, int duration) {
        6) Forward cost for Order->Multisig message
        7) Gas cost on Multisig till accept_message
     -}
-    var (bit_price_ps, cell_price_ps, flat_gas_limit, flat_gas_price, gas_price, lump_price, bit_price, cell_price) =
-    get_fee_constants();
-    (int order_cells, int order_bits, _) = compute_data_size(order_body, 2048);
-    {-
-            Compute fees:
-            https://github.com/ton-blockchain/ton/blob/51baec48a02e5ba0106b0565410d2c2fd4665157/crypto/block/transaction.cpp#L1123
-    -}
-    int gas_fees = (flat_gas_wrapper(flat_gas_limit, flat_gas_price, gas_price, MULTISIG_INIT_ORDER_GAS) +
-                    flat_gas_wrapper(flat_gas_limit, flat_gas_price, gas_price, ORDER_INIT_GAS) +
-                    flat_gas_wrapper(flat_gas_limit, flat_gas_price, gas_price, ORDER_EXECUTE_GAS) +
-                    flat_gas_wrapper(flat_gas_limit, flat_gas_price, gas_price, MULTISIG_EXECUTE_GAS));
-    {-
-             Forward
-             https://github.com/ton-blockchain/ton/blob/51baec48a02e5ba0106b0565410d2c2fd4665157/crypto/block/transaction.cpp#L1838
-    -}
-    int forward_fees = (2 * lump_price +
-                        (((INIT_ORDER_BIT_OVERHEAD  + EXECUTE_ORDER_BIT_OVERHEAD + 2 * order_bits) * bit_price +
-                        (INIT_ORDER_CELL_OVERHEAD + EXECUTE_ORDER_CELL_OVERHEAD + 2 * order_cells) * cell_price) ^/ 65536));
 
-    {-
-             Storage
-             Calculation:https://github.com/ton-blockchain/ton/blob/51baec48a02e5ba0106b0565410d2c2fd4665157/crypto/block/transaction.cpp#L629
-             Ceil rounding:https://github.com/ton-blockchain/ton/blob/51baec48a02e5ba0106b0565410d2c2fd4665157/crypto/block/transaction.cpp#L674
-    -}
-    int storage_fees = (((ORDER_STATE_BIT_OVERHEAD + order_bits) * bit_price_ps +
-                        (ORDER_STATE_CELL_OVERHEAD + order_cells) * cell_price_ps) * duration ^/ 65536);
+    ;; compute_data_size is unpredictable in gas, so we need to measure gas prior to it and after
+    ;; and add difference to MULTISIG_INIT_ORDER_GAS
+    int initial_gas = gas_consumed();
+    (int order_cells, int order_bits, _) = compute_data_size(order_body, 2048);
+    int size_counting_gas = gas_consumed() - initial_gas;
+
+    int gas_fees = get_compute_fee(BASECHAIN, MULTISIG_INIT_ORDER_GAS + size_counting_gas) +
+                   get_compute_fee(BASECHAIN, ORDER_INIT_GAS) +
+                   get_compute_fee(BASECHAIN, ORDER_EXECUTE_GAS) +
+                   get_compute_fee(BASECHAIN, MULTISIG_EXECUTE_GAS);
+
+    int forward_fees = get_forward_fee(BASECHAIN, INIT_ORDER_BIT_OVERHEAD + order_bits, INIT_ORDER_CELL_OVERHEAD + order_cells) +
+                       get_forward_fee(BASECHAIN, EXECUTE_ORDER_BIT_OVERHEAD + order_bits, EXECUTE_ORDER_CELL_OVERHEAD + order_cells);
+
+
+    int storage_fees = get_storage_fee(BASECHAIN, duration, order_bits, order_cells);
     return gas_fees + forward_fees + storage_fees;
 }
