@@ -1,16 +1,12 @@
 const int op::new_order = 1;
 const int op::execute = 2;
 const int op::execute_internal = 3;
-const int op::execute_from_module = 4;
-
 
 const int op::init = 5;
 const int op::expired = 6;
 const int op::already_executed = 7;
 const int op::approve = 8;
 const int op::approved = 9;
-
-
 
 const int actions::send_message = 10;
 const int actions::update_multisig_params = 11;
