@@ -875,11 +875,3 @@ const int RESERVE_REGULAR = 0;
 const int RESERVE_AT_MOST = 2;
 ;;; in the case of action fail - bounce transaction. No effect if RESERVE_AT_MOST (+2) is used. TVM UPGRADE 2023-07.
 const int RESERVE_BOUNCE_ON_ACTION_FAIL = 16;
-
-;; CUSTOM:
-
-;; Alias for load_ref
-(slice, cell) load_nonempty_dict(slice s) asm( -> 1 0) "LDREF";
-;; alias for store_ref
-builder store_nonempty_dict(builder b, cell c) asm(c b) "STREF";
-

@@ -20,9 +20,11 @@
         .store_coins(amount);
 
     if (body_size + msg.builder_bits() > CELL_BITS - MSG_ONLY_BODY_SIZE) {
+        ;; store body in ref
         msg = msg
         .store_only_body_ref(begin_cell().store_builder(body).end_cell());
     } else {
+        ;; store body in slice
         msg = msg
         .store_prefix_only_body()
         .store_builder(body);
@@ -40,9 +42,11 @@
     .store_coins(amount);
 
     if (body_size + msg.builder_bits() > CELL_BITS - MSG_WITH_STATE_INIT_AND_BODY_SIZE) {
+        ;; store body in ref
         msg = msg
         .store_statinit_ref_and_body_ref(state_init, begin_cell().store_builder(body).end_cell());
     } else {
+        ;; store body in slice
         msg = msg
         .store_uint(MSG_HAVE_STATE_INIT + MSG_STATE_INIT_IN_REF , MSG_WITH_STATE_INIT_AND_BODY_SIZE)
         .store_ref(state_init)
