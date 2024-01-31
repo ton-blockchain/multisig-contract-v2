@@ -18,7 +18,7 @@ cell calculate_order_state_init (slice multisig, int seqno) {
 
 slice calculate_address_by_state_init(int workchain, cell state_init) inline {
     return begin_cell().store_uint(4, 3) ;; 0x100 : $10 + anycast (Maybe = 0)
-            .store_workchain(workchain)
+            .store_int(workchain, 8)
             .store_uint(
                     cell_hash(state_init), 256)
             .end_cell()

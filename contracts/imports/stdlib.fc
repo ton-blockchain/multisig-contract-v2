@@ -829,6 +829,13 @@ builder store_query_id(builder b, int query_id) inline {
     return (s, (op, query_id));
 }
 
+builder store_op_and_query_id(builder b, int op, int query_id) inline {
+    return b
+    .store_uint(op, MSG_OP_SIZE)
+    .store_uint(query_id, MSG_QUERY_ID_SIZE);
+}
+
+
 ;; SEND MODES - https://docs.ton.org/tvm.pdf page 137, SENDRAWMSG
 
 ;; For `send_raw_message` and `send_message`:

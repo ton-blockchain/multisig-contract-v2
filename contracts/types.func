@@ -1,42 +1,44 @@
+;; Multisig types
+
 #include "imports/stdlib.fc";
 
-;; general
-(slice, (int)) ~load_timestamp(slice s) inline { return s.load_uint(48); }
-builder store_timestamp(builder b, int timestamp) inline { return b.store_uint(timestamp, 48); }
+const int TIMESTAMP_SIZE = 48;
 
-(slice, (int)) ~load_hash(slice s) inline { return s.load_uint(256); }
-builder store_hash(builder b, int hash) inline { return b.store_uint(hash, 256); }
-
-
-builder store_workchain(builder b, int wc) inline { return b.store_int(wc, 8); }
-
-;; Op-codes
-
-(slice, (int, int)) ~load_body_header(slice s) inline {
-    int op = s~load_uint(32);
-    int query_id = s~load_uint(64);
-    return (s, (op, query_id));
+(slice, int) ~load_timestamp(slice s) inline {
+    return s.load_uint(TIMESTAMP_SIZE);
+}
+builder store_timestamp(builder b, int timestamp) inline {
+    return b.store_uint(timestamp, TIMESTAMP_SIZE);
 }
 
-builder store_body_header(builder b, int op, int query_id) inline {
-    return b.store_uint(op, 32)
-    .store_uint(query_id, 64);
-}
+const int HASH_SIZE = 256;
 
-;; Multisig types
+(slice, int) ~load_hash(slice s) inline {
+    return s.load_uint(HASH_SIZE);
+}
+builder store_hash(builder b, int hash) inline {
+    return b.store_uint(hash, HASH_SIZE);
+}
 
 {- By index we mean index of signer in signers dictionary. The same type is used
    for threshold, singers number and for proposers indexes -}
-
 const int INDEX_SIZE = 8;
-(slice, (int)) ~load_index(slice s) inline { return s.load_uint(INDEX_SIZE); }
-builder store_index(builder b, int index) inline { return b.store_uint(index, INDEX_SIZE); }
+
+(slice, int) ~load_index(slice s) inline {
+    return s.load_uint(INDEX_SIZE);
+}
+builder store_index(builder b, int index) inline {
+    return b.store_uint(index, INDEX_SIZE);
+}
 
 const int ACTION_INDEX_SIZE = INDEX_SIZE;
 
 
-
 const int ORDER_SEQNO_SIZE = 32;
-(slice, (int)) ~load_order_seqno(slice s) inline { return s.load_uint(ORDER_SEQNO_SIZE); }
-builder store_order_seqno(builder b, int seqno) inline { return b.store_uint(seqno, ORDER_SEQNO_SIZE); }
 
+(slice, int) ~load_order_seqno(slice s) inline {
+    return s.load_uint(ORDER_SEQNO_SIZE);
+}
+builder store_order_seqno(builder b, int seqno) inline {
+    return b.store_uint(seqno, ORDER_SEQNO_SIZE);
+}

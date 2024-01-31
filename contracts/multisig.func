@@ -79,7 +79,7 @@ cell proposers) impure {
     int flags = cs~load_uint(4);
     slice sender = cs~load_msg_addr();
 
-    (int op, int query_id) = in_msg_body~load_body_header();
+    (int op, int query_id) = in_msg_body~load_op_and_query_id();
 
     (int next_order_seqno, int threshold,
         cell signers, int signers_num,
@@ -101,7 +101,7 @@ cell proposers) impure {
 
         cell state_init = calculate_order_state_init(my_address(), next_order_seqno);
         slice order_address = calculate_address_by_state_init(BASECHAIN, state_init);
-        builder init_body = begin_cell().store_body_header(op::init, 0)
+        builder init_body = begin_cell().store_op_and_query_id(op::init, 0)
         .store_index(threshold)
         .store_nonempty_dict(signers)
         .store_index(signers_num)
