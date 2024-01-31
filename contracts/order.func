@@ -107,16 +107,16 @@
         }
     } elseif(op == op::approve) {
         if (expiration_date < now()) {
-            send_msg_builder(sender, 0,
+            send_message_with_only_body(sender, 0,
                 begin_cell().store_op_and_query_id(op::expired, query_id),
                 NON_BOUNCEABLE,
                 SEND_MODE_CARRY_ALL_REMAINING_MESSAGE_VALUE | SEND_MODE_BOUNCE_ON_ACTION_FAIL);
-            send_msg_builder(multisig, 0,
+            send_message_with_only_body(multisig, 0,
                 begin_cell().store_op_and_query_id(op::expired, query_id),
                 NON_BOUNCEABLE,
                 SEND_MODE_IGNORE_ERRORS | SEND_MODE_CARRY_ALL_BALANCE | SEND_MODE_BOUNCE_ON_ACTION_FAIL);
         } elseif (executed?) {
-            send_msg_builder(sender, 0,
+            send_message_with_only_body(sender, 0,
                 begin_cell().store_op_and_query_id(op::already_executed, query_id),
                 NON_BOUNCEABLE,
                 SEND_MODE_CARRY_ALL_REMAINING_MESSAGE_VALUE | SEND_MODE_BOUNCE_ON_ACTION_FAIL);
@@ -128,7 +128,7 @@
 
             (approvals, approvals_num) ~add_approval(signer_index);
             check_threshold? = true;
-            send_msg_builder(sender, 0,
+            send_message_with_only_body(sender, 0,
                 begin_cell().store_op_and_query_id(op::approved, query_id),
                 NON_BOUNCEABLE,
                 SEND_MODE_CARRY_ALL_REMAINING_MESSAGE_VALUE | SEND_MODE_BOUNCE_ON_ACTION_FAIL);
@@ -139,7 +139,7 @@
 
     ;; Order can be approved through approve and also through init (if threshold == 1)
     if(check_threshold? & (approvals_num == threshold)) {
-        send_msg_builder(multisig, 0,
+        send_message_with_only_body(multisig, 0,
             begin_cell().store_op_and_query_id(op::execute, query_id)
             .store_order_seqno(order_seqno)
             .store_timestamp(expiration_date)

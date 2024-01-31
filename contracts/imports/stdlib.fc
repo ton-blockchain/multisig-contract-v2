@@ -673,6 +673,8 @@ const int FALSE = 0;
 const int MASTERCHAIN = -1;
 const int BASECHAIN = 0;
 
+const int CELL_BITS = 1023;
+
 ;;; skip (Maybe ^Cell) from `slice` [s].
 (slice, ()) ~skip_maybe_ref(slice s) asm "SKIPOPTREF";
 

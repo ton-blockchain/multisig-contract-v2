@@ -111,7 +111,7 @@ cell proposers) impure {
         if(signer?) {
             init_body = init_body.store_index(index);
         }
-        send_msg_builder_with_stateinit(order_address, 0,
+        send_message_with_state_init_and_body(order_address, 0,
             state_init,
             init_body,
             BOUNCEABLE,
