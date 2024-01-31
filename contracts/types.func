@@ -4,22 +4,14 @@
 (slice, (int)) ~load_timestamp(slice s) inline { return s.load_uint(48); }
 builder store_timestamp(builder b, int timestamp) inline { return b.store_uint(timestamp, 48); }
 
-(slice, (int)) ~load_bool(slice s) inline { return s.load_int(1); }
-builder store_bool(builder b, int flag) inline { return b.store_int(flag, 1); }
-
-
 (slice, (int)) ~load_hash(slice s) inline { return s.load_uint(256); }
 builder store_hash(builder b, int hash) inline { return b.store_uint(hash, 256); }
 
 
 builder store_workchain(builder b, int wc) inline { return b.store_int(wc, 8); }
-const int MASTERCHAIN = -1;
-const int BASECHAIN = 0;
 
 ;; Op-codes
 
-(slice, (int)) ~load_op(slice s) inline { return s.load_uint(32); }
-(slice, (int)) ~load_query_id(slice s) inline { return s.load_uint(64); }
 (slice, (int, int)) ~load_body_header(slice s) inline {
     int op = s~load_uint(32);
     int query_id = s~load_uint(64);
