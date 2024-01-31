@@ -109,17 +109,17 @@
         if (expiration_date < now()) {
             send_msg_builder(sender, 0,
                 begin_cell().store_op_and_query_id(op::expired, query_id),
-                msgflag::NON_BOUNCEABLE,
-                sendmode::CARRY_ALL_REMAINING_MESSAGE_VALUE | sendmode::BOUNCE_ON_ACTION_FAIL);
+                NON_BOUNCEABLE,
+                SEND_MODE_CARRY_ALL_REMAINING_MESSAGE_VALUE | SEND_MODE_BOUNCE_ON_ACTION_FAIL);
             send_msg_builder(multisig, 0,
                 begin_cell().store_op_and_query_id(op::expired, query_id),
-                msgflag::NON_BOUNCEABLE,
-                sendmode::IGNORE_ERRORS | sendmode::CARRY_ALL_BALANCE | sendmode::BOUNCE_ON_ACTION_FAIL);
+                NON_BOUNCEABLE,
+                SEND_MODE_IGNORE_ERRORS | SEND_MODE_CARRY_ALL_BALANCE | SEND_MODE_BOUNCE_ON_ACTION_FAIL);
         } elseif (executed?) {
             send_msg_builder(sender, 0,
                 begin_cell().store_op_and_query_id(op::already_executed, query_id),
-                msgflag::NON_BOUNCEABLE,
-                sendmode::CARRY_ALL_REMAINING_MESSAGE_VALUE | sendmode::BOUNCE_ON_ACTION_FAIL);
+                NON_BOUNCEABLE,
+                SEND_MODE_CARRY_ALL_REMAINING_MESSAGE_VALUE | SEND_MODE_BOUNCE_ON_ACTION_FAIL);
         } else {
             int signer_index = in_msg_body~load_index();
             (slice signer, int found?) = signers.udict_get?(INDEX_SIZE, signer_index);
@@ -130,8 +130,8 @@
             check_threshold? = true;
             send_msg_builder(sender, 0,
                 begin_cell().store_op_and_query_id(op::approved, query_id),
-                msgflag::NON_BOUNCEABLE,
-                sendmode::CARRY_ALL_REMAINING_MESSAGE_VALUE | sendmode::BOUNCE_ON_ACTION_FAIL);
+                NON_BOUNCEABLE,
+                SEND_MODE_CARRY_ALL_REMAINING_MESSAGE_VALUE | SEND_MODE_BOUNCE_ON_ACTION_FAIL);
         }
     } else {
         throw(error::unknown_op);
@@ -146,8 +146,8 @@
             .store_index(approvals_num)
             .store_hash(signers.cell_hash())
             .store_ref(order),
-            msgflag::BOUNCEABLE,
-            sendmode::CARRY_ALL_BALANCE | sendmode::BOUNCE_ON_ACTION_FAIL);
+            BOUNCEABLE,
+            SEND_MODE_CARRY_ALL_BALANCE | SEND_MODE_BOUNCE_ON_ACTION_FAIL);
         executed? = true;
     }
     save_data(multisig, order_seqno, threshold,

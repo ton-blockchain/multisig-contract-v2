@@ -1,20 +1,6 @@
 #include "imports/stdlib.fc";
 #include "types.func";
 
-;; int_msg_info$0 ihr_disabled:Bool bounce:Bool bounced:Bool src:MsgAddress -> 011000
-const int msgflag::NON_BOUNCEABLE = 0x10;
-const int msgflag::BOUNCEABLE = 0x18;
-
-const int sendmode::REGULAR = 0;
-const int sendmode::PAY_FEES_SEPARETELY = 1;
-const int sendmode::IGNORE_ERRORS = 2;
-const int sendmode::BOUNCE_ON_ACTION_FAIL = 16;
-const int sendmode::DESTROY = 32;
-const int sendmode::CARRY_ALL_REMAINING_MESSAGE_VALUE = 64;
-const int sendmode::CARRY_ALL_BALANCE = 128;
-
-builder store_msg_flags(builder b, int msg_flag) inline { return b.store_uint(msg_flag, 6); }
-
 {-
   Helpers below fill in default/overwritten values of message layout:
   Relevant part of TL-B schema:
@@ -44,7 +30,7 @@ builder store_msgbody_prefix_ref(builder b, cell ref) inline {
     int payload_length = payload.null?() ? 0 : payload.builder_bits();
 
     builder msg = begin_cell()
-        .store_msg_flags(flags)
+        .store_msg_flags_and_address_none(flags)
         .store_slice(to_address)
         .store_coins(amount);
 
@@ -63,7 +49,7 @@ builder store_msgbody_prefix_ref(builder b, cell ref) inline {
     int payload_length = payload.null?() ? 0 : payload.builder_bits();
 
     builder msg = begin_cell()
-    .store_msg_flags(flags)
+    .store_msg_flags_and_address_none(flags)
     .store_slice(to_address)
     .store_coins(amount);
 
