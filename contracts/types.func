@@ -29,6 +29,7 @@ builder store_hash(builder b, int hash) inline {
 {- By index we mean index of signer in signers dictionary. The same type is used
    for threshold, singers number and for proposers indexes -}
 const int INDEX_SIZE = 8;
+const int MASK_SIZE = 1 << INDEX_SIZE;
 
 (slice, int) ~load_index(slice s) inline {
     return s.load_uint(INDEX_SIZE);
