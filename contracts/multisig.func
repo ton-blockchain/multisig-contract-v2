@@ -18,7 +18,7 @@ int validate_dictionary_sequence(cell dict) impure {
     return expected_index;
 }
 
-((int, cell, int, cell), ()) ~execute_order ((int, cell, int, cell) storage,
+((int, cell, int, cell), ()) ~execute_order((int, cell, int, cell) storage,
 cell order_body) impure {
 
     accept_message();
@@ -33,7 +33,7 @@ cell order_body) impure {
         if (found?) {
             action = action.preload_ref().begin_parse();
             int action_op = action~load_op();
-            if(action_op == actions::send_message) {
+            if (action_op == actions::send_message) {
                 int mode = action~load_uint(8);
                 ;; Potentially multisig can init order in this request, but since
                 ;; order will reject second initialisation there is no security issue
@@ -64,7 +64,7 @@ cell order_body) impure {
         proposers);
 }
 
-() save_data (int next_order_seqno, int threshold,
+() save_data(int next_order_seqno, int threshold,
 cell signers, int signers_num,
 cell proposers) impure {
     begin_cell().store_order_seqno(next_order_seqno).store_index(threshold)
@@ -85,7 +85,7 @@ cell proposers) impure {
         cell signers, int signers_num,
         cell proposers) = load_data();
 
-    if(op == op::new_order) {
+    if (op == op::new_order) {
         int signer? = in_msg_body~load_bool();
         int index = in_msg_body~load_index();
         int expiration_date = in_msg_body~load_timestamp();
@@ -108,7 +108,7 @@ cell proposers) impure {
         .store_timestamp(expiration_date)
         .store_ref(order_body)
         .store_bool(signer?);
-        if(signer?) {
+        if (signer?) {
             init_body = init_body.store_index(index);
         }
         send_message_with_state_init_and_body(order_address, 0,
@@ -117,7 +117,7 @@ cell proposers) impure {
             BOUNCEABLE,
             SEND_MODE_CARRY_ALL_REMAINING_MESSAGE_VALUE | SEND_MODE_BOUNCE_ON_ACTION_FAIL);
         next_order_seqno += 1;
-    } elseif(op == op::execute) {
+    } elseif (op == op::execute) {
         ;; check that sender is order smart-contract and check that it has recent
         ;; signers dict
 
@@ -134,14 +134,14 @@ cell proposers) impure {
         throw_unless(error::singers_outdated, (signers_hash == signers.cell_hash()) & (approvals_collected >= threshold));
         throw_unless(error::expired, expiration_date >= now());
 
-        (threshold, signers, signers_num, proposers)~execute_order(order_body);
+        (threshold, signers, signers_num, proposers) ~execute_order(order_body);
     } elseif (op == op::execute_internal) {
         ;; we always trust ourselves, this feature is used to make chains of executions
         ;; where last action of previous execution triggers new one.
 
         throw_unless(error::unauthorized_execute, equal_slices_bits(sender, my_address()));
         cell order_body = in_msg_body~load_ref();
-        (threshold, signers, signers_num, proposers)~execute_order(order_body);
+        (threshold, signers, signers_num, proposers) ~execute_order(order_body);
     }
 
     save_data(next_order_seqno, threshold,
@@ -149,7 +149,7 @@ cell proposers) impure {
         proposers);
 }
 
-(int, int, cell, cell, cell, cell) get_multisig_data() method_id  {
+(int, int, cell, cell, cell, cell) get_multisig_data() method_id {
     (int next_order_seqno, int threshold,
         cell signers, int signers_num,
         cell proposers) = load_data();

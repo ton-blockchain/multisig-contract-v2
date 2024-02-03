@@ -15,9 +15,9 @@
     int body_bits = body.null?() ? 0 : body.builder_bits();
 
     builder msg = begin_cell()
-        .store_msg_flags_and_address_none(msg_flags)
-        .store_slice(to_address)
-        .store_coins(amount);
+    .store_msg_flags_and_address_none(msg_flags)
+    .store_slice(to_address)
+    .store_coins(amount);
 
     if (body_bits + msg.builder_bits() > CELL_BITS - MSG_ONLY_BODY_SIZE) {
         ;; store body in ref
@@ -54,7 +54,7 @@
     } else {
         ;; store body in slice
         msg = msg
-        .store_uint(MSG_HAVE_STATE_INIT + MSG_STATE_INIT_IN_REF , MSG_WITH_STATE_INIT_AND_BODY_SIZE)
+        .store_uint(MSG_HAVE_STATE_INIT + MSG_STATE_INIT_IN_REF, MSG_WITH_STATE_INIT_AND_BODY_SIZE)
         .store_ref(state_init)
         .store_builder(body);
     }

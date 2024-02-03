@@ -20,30 +20,30 @@
     slice ds = get_data().begin_parse();
     (slice multisig, int order_seqno) = (ds~load_msg_addr(), ds~load_order_seqno());
     ifnot (ds.slice_bits()) {
-      return (multisig, order_seqno, null(), null(), null(), null(), null(), null(), null(), null());
+        return (multisig, order_seqno, null(), null(), null(), null(), null(), null(), null(), null());
     }
     (int threshold,
-     int executed?, cell signers, int signers_num, 
-     int approvals, int approvals_num, int expiration_date,
-     cell order) =               (ds~load_index(),
-                                  ds~load_bool(), ds~load_nonempty_dict(), ds~load_index(),
-                                  ds~load_uint(1 << INDEX_SIZE), ds~load_index(), ds~load_timestamp(),
-                                  ds~load_ref());
-     return (multisig, order_seqno, threshold,
-             executed?, signers, signers_num, 
-             approvals, approvals_num, expiration_date,
-             order);
+        int executed?, cell signers, int signers_num,
+        int approvals, int approvals_num, int expiration_date,
+        cell order) = (ds~load_index(),
+        ds~load_bool(), ds~load_nonempty_dict(), ds~load_index(),
+        ds~load_uint(1 << INDEX_SIZE), ds~load_index(), ds~load_timestamp(),
+        ds~load_ref());
+    return (multisig, order_seqno, threshold,
+        executed?, signers, signers_num,
+        approvals, approvals_num, expiration_date,
+        order);
 }
 
-() save_data (slice multisig, int order_seqno, int threshold,
-              int executed?, cell signers, int signers_num, 
-              int approvals, int approvals_num, int expiration_date,
-              cell order) impure {
+() save_data(slice multisig, int order_seqno, int threshold,
+int executed?, cell signers, int signers_num,
+int approvals, int approvals_num, int expiration_date,
+cell order) impure {
     begin_cell().store_slice(multisig).store_order_seqno(order_seqno).store_index(threshold)
-                .store_bool(executed?).store_nonempty_dict(signers).store_index(signers_num)
-                .store_uint(approvals, 1 << INDEX_SIZE)
-                .store_index(approvals_num).store_timestamp(expiration_date)
-                .store_ref(order)
+    .store_bool(executed?).store_nonempty_dict(signers).store_index(signers_num)
+    .store_uint(approvals, 1 << INDEX_SIZE)
+    .store_index(approvals_num).store_timestamp(expiration_date)
+    .store_ref(order)
     .end_cell()
     .set_data();
 }
@@ -54,22 +54,23 @@
     slice sender = cs~load_msg_addr();
 
     (slice multisig, int order_seqno, int threshold,
-     int executed?, cell signers, int signers_num, 
-     int approvals, int approvals_num, int expiration_date,
-     cell order) = load_data();
+        int executed?, cell signers, int signers_num,
+        int approvals, int approvals_num, int expiration_date,
+        cell order) = load_data();
 
     int op = in_msg_body~load_op();
     int query_id = cur_lt();
-    if(op == 0) { ;; message with text comment
+    if (op == 0) {
+        ;; message with text comment
         throw_unless(error::unknown_op,
             equal_slices_bits(in_msg_body, "approve") &
-                 ( in_msg_body.slice_refs() == 0));
+            (in_msg_body.slice_refs() == 0));
         ;; lets find signer in the signers dict
         slice index_slice = "fff";
         int found_signer? = false;
         do {
             (index_slice, slice value, int found?) = signers.dict_get_prev?(INDEX_SIZE, index_slice);
-            if(found?) {
+            if (found?) {
                 if (equal_slices_bits(sender, value)) {
                     found? = false;
                     found_signer? = true;
@@ -86,7 +87,7 @@
     }
 
     int check_threshold? = false;
-    if(op == op::init) {
+    if (op == op::init) {
         throw_unless(error::unauthorized_init, equal_slices_bits(sender, multisig));
         throw_unless(error::already_inited, null?(threshold));
         ;; Let's init
@@ -101,11 +102,11 @@
         order = in_msg_body~load_ref();
         int approve_on_init? = in_msg_body~load_bool();
         if (approve_on_init?) {
-           int signer_index = in_msg_body~load_index();
-           (approvals, approvals_num)~add_approval(signer_index);
+            int signer_index = in_msg_body~load_index();
+            (approvals, approvals_num) ~add_approval(signer_index);
             check_threshold? = true;
         }
-    } elseif(op == op::approve) {
+    } elseif (op == op::approve) {
         if (expiration_date < now()) {
             send_message_with_only_body(sender, 0,
                 begin_cell().store_op_and_query_id(op::expired, query_id),
@@ -138,7 +139,7 @@
     }
 
     ;; Order can be approved through approve and also through init (if threshold == 1)
-    if(check_threshold? & (approvals_num == threshold)) {
+    if (check_threshold? & (approvals_num == threshold)) {
         send_message_with_only_body(multisig, 0,
             begin_cell().store_op_and_query_id(op::execute, query_id)
             .store_order_seqno(order_seqno)
@@ -151,9 +152,9 @@
         executed? = true;
     }
     save_data(multisig, order_seqno, threshold,
-              executed?, signers, signers_num, 
-              approvals, approvals_num, expiration_date,
-              order);
+        executed?, signers, signers_num,
+        approvals, approvals_num, expiration_date,
+        order);
 }
 
 _ get_order_data() method_id {

@@ -3,7 +3,7 @@
 #include "imports/stdlib.fc";
 
 ;; Alias for load_ref
-(slice, cell) load_nonempty_dict(slice s) asm( -> 1 0) "LDREF";
+(slice, cell) load_nonempty_dict(slice s) asm(-> 1 0) "LDREF";
 
 ;; alias for store_ref
 builder store_nonempty_dict(builder b, cell c) asm(c b) "STREF";

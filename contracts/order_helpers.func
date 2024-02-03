@@ -9,7 +9,7 @@ cell pack_order_init_data(slice multisig_address, int order_seqno) inline {
     .end_cell();
 }
 
-cell calculate_order_state_init (slice multisig_address, int order_seqno) {
+cell calculate_order_state_init(slice multisig_address, int order_seqno) {
     {-
     https://github.com/ton-blockchain/ton/blob/8a9ff339927b22b72819c5125428b70c406da631/crypto/block/block.tlb#L144
     _ split_depth:(Maybe (## 5)) special:(Maybe TickTock)
@@ -17,11 +17,11 @@ cell calculate_order_state_init (slice multisig_address, int order_seqno) {
     library:(Maybe ^Cell) = StateInit;
   -}
     return begin_cell()
-            .store_uint(0, 2) ;; 0b00 - No split_depth; No special
-            .store_maybe_ref(order_code())
-            .store_maybe_ref(pack_order_init_data(multisig_address, order_seqno))
-            .store_uint(0,1) ;; Empty libraries
-            .end_cell();
+    .store_uint(0, 2) ;; 0b00 - No split_depth; No special
+    .store_maybe_ref(order_code())
+    .store_maybe_ref(pack_order_init_data(multisig_address, order_seqno))
+    .store_uint(0, 1) ;; Empty libraries
+    .end_cell();
 }
 
 slice calculate_address_by_state_init(int workchain, cell state_init) inline {
@@ -30,11 +30,11 @@ slice calculate_address_by_state_init(int workchain, cell state_init) inline {
     addr_std$10 anycast:(Maybe Anycast) workchain_id:int8 address:bits256  = MsgAddressInt;
     -}
     return begin_cell()
-            .store_uint(4, 3) ;; 0b100 = addr_std$10 tag; No anycast
-            .store_int(workchain, 8)
-            .store_uint(cell_hash(state_init), 256)
-            .end_cell()
-            .begin_parse();
+    .store_uint(4, 3) ;; 0b100 = addr_std$10 tag; No anycast
+    .store_int(workchain, 8)
+    .store_uint(cell_hash(state_init), 256)
+    .end_cell()
+    .begin_parse();
 }
 
 const int MULTISIG_INIT_ORDER_GAS = 11603; ;; 255 signers
@@ -66,13 +66,13 @@ int calculate_order_processing_cost(cell order_body, int duration) {
     (int order_cells, int order_bits, _) = compute_data_size(order_body, 2048);
     int size_counting_gas = gas_consumed() - initial_gas;
 
-    int gas_fees = get_compute_fee(BASECHAIN, MULTISIG_INIT_ORDER_GAS + size_counting_gas) +
-                   get_compute_fee(BASECHAIN, ORDER_INIT_GAS) +
-                   get_compute_fee(BASECHAIN, ORDER_EXECUTE_GAS) +
-                   get_compute_fee(BASECHAIN, MULTISIG_EXECUTE_GAS);
+    int gas_fees = get_compute_fee(BASECHAIN,MULTISIG_INIT_ORDER_GAS + size_counting_gas) +
+    get_compute_fee(BASECHAIN, ORDER_INIT_GAS) +
+    get_compute_fee(BASECHAIN, ORDER_EXECUTE_GAS) +
+    get_compute_fee(BASECHAIN, MULTISIG_EXECUTE_GAS);
 
     int forward_fees = get_forward_fee(BASECHAIN, INIT_ORDER_BIT_OVERHEAD + order_bits, INIT_ORDER_CELL_OVERHEAD + order_cells) +
-                       get_forward_fee(BASECHAIN, EXECUTE_ORDER_BIT_OVERHEAD + order_bits, EXECUTE_ORDER_CELL_OVERHEAD + order_cells);
+    get_forward_fee(BASECHAIN, EXECUTE_ORDER_BIT_OVERHEAD + order_bits, EXECUTE_ORDER_CELL_OVERHEAD + order_cells);
 
 
     int storage_fees = get_storage_fee(BASECHAIN, duration, order_bits, order_cells);
