@@ -4,78 +4,75 @@
 #include "messages.func";
 #include "errors.func";
 
-(slice, slice, int) dict_get_prev?(cell dict, int key_len, slice pivot) asm(pivot dict key_len -> 1 0 2) "DICTGETPREV" "NULLSWAPIFNOT2";
-
-
 ((int, int), ()) ~add_approval((int, int) approve_data, int signer_index) impure {
-    (int approvals, int approvals_num) = approve_data;
+    (int approvals_mask, int approvals_num) = approve_data;
     int mask = 1 << signer_index;
-    throw_if(error::already_approved, approvals & mask);
+    throw_if(error::already_approved, approvals_mask & mask);
     approvals_num += 1;
-    approvals |= mask;
-    return ((approvals, approvals_num), ());
+    approvals_mask |= mask;
+    return ((approvals_mask, approvals_num), ());
 }
 
 (slice, int, int, int, cell, int, int, int, int, cell) load_data() {
     slice ds = get_data().begin_parse();
-    (slice multisig, int order_seqno) = (ds~load_msg_addr(), ds~load_order_seqno());
+    (slice multisig_address, int order_seqno) = (ds~load_msg_addr(), ds~load_order_seqno());
 
     if (ds.slice_bits() == 0) {
-        return (multisig, order_seqno, null(), null(), null(), null(), null(), null(), null(), null());
+        return (multisig_address, order_seqno, null(), null(), null(), null(), null(), null(), null(), null());
     }
 
     (int threshold,
         int executed?,
         cell signers,
-        int signers_num,
-        int approvals, ;; approvals mask
-        int approvals_num, ;; approvals count
+        int signers_num, ;; todo: unused
+        int approvals_mask,
+        int approvals_num,
         int expiration_date,
         cell order) = (
-        ds~load_index(),
-        ds~load_bool(),
-        ds~load_nonempty_dict(),
-        ds~load_index(),
-        ds~load_uint(MASK_SIZE),
-        ds~load_index(),
-        ds~load_timestamp(),
-        ds~load_ref()
+        ds~load_index(), ;; threshold
+        ds~load_bool(), ;; executed?,
+        ds~load_nonempty_dict(), ;; signers
+        ds~load_index(), ;; signers_num
+        ds~load_uint(MASK_SIZE), ;; approvals_mask
+        ds~load_index(), ;; approvals_num
+        ds~load_timestamp(), ;; expiration_date
+        ds~load_ref() ;; order
     );
 
     ds.end_parse();
 
-    return (multisig,
+    return (multisig_address,
         order_seqno,
         threshold,
         executed?,
         signers,
         signers_num,
-        approvals,
+        approvals_mask,
         approvals_num,
         expiration_date,
         order);
 }
 
 () save_data(
-slice multisig,
+slice multisig_address,
 int order_seqno,
 int threshold,
 int executed?,
 cell signers,
 int signers_num,
-int approvals,
+int approvals_mask,
 int approvals_num,
 int expiration_date,
-cell order) impure {
+cell order) impure inline {
     set_data(
         begin_cell()
-        .store_slice(multisig)
+        .store_slice(multisig_address)
         .store_order_seqno(order_seqno)
         .store_index(threshold)
         .store_bool(executed?)
         .store_nonempty_dict(signers)
         .store_index(signers_num)
-        .store_uint(approvals, MASK_SIZE)
+        .store_uint(approvals_mask, MASK_SIZE)
         .store_index(approvals_num)
         .store_timestamp(expiration_date)
         .store_ref(order)
@@ -84,111 +81,137 @@ cell order) impure {
 }
 
 () recv_internal(int balance, int msg_value, cell in_msg_full, slice in_msg_body) {
-    slice cs = in_msg_full.begin_parse();
-    int flags = cs~load_uint(4);
-    slice sender = cs~load_msg_addr();
-
-    (slice multisig, int order_seqno, int threshold,
-        int executed?, cell signers, int signers_num,
-        int approvals, int approvals_num, int expiration_date,
-        cell order) = load_data();
+    slice in_msg_full_slice = in_msg_full.begin_parse();
+    int msg_flags = in_msg_full_slice~load_msg_flags();
+    if (is_bounced(msg_flags)) {
+        return ();
+    }
+    slice sender_address = in_msg_full_slice~load_msg_addr();
 
     int op = in_msg_body~load_op();
     int query_id = cur_lt();
+    int signer_index = -1;
+
+    (slice multisig_address, int order_seqno, int threshold,
+        int executed?, cell signers, int signers_num,
+        int approvals_mask, int approvals_num, int expiration_date,
+        cell order) = load_data();
+
     if (op == 0) {
         ;; message with text comment
+        ;; todo: some wallets send text body in ref
         throw_unless(error::unknown_op,
             equal_slices_bits(in_msg_body, "approve") &
             (in_msg_body.slice_refs() == 0));
+
         ;; lets find signer in the signers dict
-        slice index_slice = "fff";
         int found_signer? = false;
         do {
-            (index_slice, slice value, int found?) = signers.dict_get_prev?(INDEX_SIZE, index_slice);
+            (signer_index, slice value, int found?) = signers.udict_get_next?(INDEX_SIZE, signer_index);
             if (found?) {
-                if (equal_slices_bits(sender, value)) {
+                if (equal_slices_bits(sender_address, value)) {
                     found? = false;
                     found_signer? = true;
-                    ;; below, in (op == op::approve) we will read in_msg_body to find index
-                    ;; fortunately index_slice contains exactly this information and we can reuse logic
-                    op = op::approve;
-                    in_msg_body = index_slice;
                 }
             }
         } until (~ found?);
+
         throw_unless(error::unauthorized_sign, found_signer?);
+
+        op = op::approve;
+
     } else {
         query_id = in_msg_body~load_query_id();
     }
 
-    int check_threshold? = false;
+    int need_check_threshold? = false;
     if (op == op::init) {
-        throw_unless(error::unauthorized_init, equal_slices_bits(sender, multisig));
-        throw_unless(error::already_inited, null?(threshold));
+        throw_unless(error::unauthorized_init, equal_slices_bits(sender_address, multisig_address));
+        throw_unless(error::already_inited, null?(threshold)); ;; todo: already_inited but approve_on_init
         ;; Let's init
         threshold = in_msg_body~load_index();
         executed? = false;
         signers = in_msg_body~load_nonempty_dict();
         signers_num = in_msg_body~load_index();
-        approvals = 0;
+        approvals_mask = 0;
         approvals_num = 0;
         expiration_date = in_msg_body~load_timestamp();
         throw_unless(error::expired, expiration_date >= now());
         order = in_msg_body~load_ref();
         int approve_on_init? = in_msg_body~load_bool();
         if (approve_on_init?) {
-            int signer_index = in_msg_body~load_index();
-            (approvals, approvals_num) ~add_approval(signer_index);
-            check_threshold? = true;
+            int init_signer_index = in_msg_body~load_index();
+            (approvals_mask, approvals_num)~add_approval(init_signer_index);
+            need_check_threshold? = true;
         }
     } elseif (op == op::approve) {
         if (expiration_date < now()) {
-            send_message_with_only_body(sender, 0,
+            send_message_with_only_body(
+                sender_address,
+                0,
                 begin_cell().store_op_and_query_id(op::expired, query_id),
                 NON_BOUNCEABLE,
-                SEND_MODE_CARRY_ALL_REMAINING_MESSAGE_VALUE | SEND_MODE_BOUNCE_ON_ACTION_FAIL);
-            send_message_with_only_body(multisig, 0,
+                SEND_MODE_CARRY_ALL_REMAINING_MESSAGE_VALUE | SEND_MODE_BOUNCE_ON_ACTION_FAIL
+            );
+
+            send_message_with_only_body(;; todo: why send to multisig?
+                multisig_address,
+                0,
                 begin_cell().store_op_and_query_id(op::expired, query_id),
                 NON_BOUNCEABLE,
-                SEND_MODE_IGNORE_ERRORS | SEND_MODE_CARRY_ALL_BALANCE | SEND_MODE_BOUNCE_ON_ACTION_FAIL);
+                SEND_MODE_IGNORE_ERRORS | SEND_MODE_CARRY_ALL_BALANCE | SEND_MODE_BOUNCE_ON_ACTION_FAIL
+            );
         } elseif (executed?) {
-            send_message_with_only_body(sender, 0,
+
+            send_message_with_only_body( ;; todo: why not error?
+                sender_address,
+                0,
                 begin_cell().store_op_and_query_id(op::already_executed, query_id),
                 NON_BOUNCEABLE,
-                SEND_MODE_CARRY_ALL_REMAINING_MESSAGE_VALUE | SEND_MODE_BOUNCE_ON_ACTION_FAIL);
+                SEND_MODE_CARRY_ALL_REMAINING_MESSAGE_VALUE | SEND_MODE_BOUNCE_ON_ACTION_FAIL
+            );
         } else {
-            int signer_index = in_msg_body~load_index();
-            (slice signer, int found?) = signers.udict_get?(INDEX_SIZE, signer_index);
-            throw_unless(error::unauthorized_sign, found?);
-            throw_unless(error::unauthorized_sign, equal_slices_bits(sender, signer));
+            if (signer_index == -1) {
+                signer_index = in_msg_body~load_index();
+                (slice signer, int found?) = signers.udict_get?(INDEX_SIZE, signer_index);
+                throw_unless(error::unauthorized_sign, found?);
+                throw_unless(error::unauthorized_sign, equal_slices_bits(sender_address, signer));
+            }
 
-            (approvals, approvals_num) ~add_approval(signer_index);
-            check_threshold? = true;
-            send_message_with_only_body(sender, 0,
-                begin_cell().store_op_and_query_id(op::approved, query_id),
+            (approvals_mask, approvals_num)~add_approval(signer_index);
+            need_check_threshold? = true;
+            send_message_with_only_body(
+                sender_address,
+                0,
+                begin_cell().store_op_and_query_id(op::approve_accepted, query_id),
                 NON_BOUNCEABLE,
-                SEND_MODE_CARRY_ALL_REMAINING_MESSAGE_VALUE | SEND_MODE_BOUNCE_ON_ACTION_FAIL);
+                SEND_MODE_CARRY_ALL_REMAINING_MESSAGE_VALUE | SEND_MODE_BOUNCE_ON_ACTION_FAIL
+            );
         }
     } else {
         throw(error::unknown_op);
     }
 
     ;; Order can be approved through approve and also through init (if threshold == 1)
-    if (check_threshold? & (approvals_num == threshold)) {
-        send_message_with_only_body(multisig, 0,
-            begin_cell().store_op_and_query_id(op::execute, query_id)
+    if (need_check_threshold? & (approvals_num == threshold)) {
+        send_message_with_only_body(
+            multisig_address,
+            0,
+            begin_cell()
+            .store_op_and_query_id(op::execute, query_id)
             .store_order_seqno(order_seqno)
             .store_timestamp(expiration_date)
             .store_index(approvals_num)
             .store_hash(signers.cell_hash())
             .store_ref(order),
             BOUNCEABLE,
-            SEND_MODE_CARRY_ALL_BALANCE | SEND_MODE_BOUNCE_ON_ACTION_FAIL);
+            SEND_MODE_CARRY_ALL_BALANCE | SEND_MODE_BOUNCE_ON_ACTION_FAIL
+        );
         executed? = true;
     }
-    save_data(multisig, order_seqno, threshold,
+    save_data(multisig_address, order_seqno, threshold,
         executed?, signers, signers_num,
-        approvals, approvals_num, expiration_date,
+        approvals_mask, approvals_num, expiration_date,
         order);
 }
 

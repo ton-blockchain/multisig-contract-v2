@@ -6,7 +6,7 @@ const int op::init = 5;
 const int op::expired = 6;
 const int op::already_executed = 7;
 const int op::approve = 8;
-const int op::approved = 9;
+const int op::approve_accepted = 9;
 
 const int actions::send_message = 10;
 const int actions::update_multisig_params = 11;

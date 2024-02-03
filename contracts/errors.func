@@ -1,4 +1,5 @@
 const int error::unauthorized_new_order = 1007;
+const int error::invalid_new_order = 1008;
 const int error::not_enough_ton = 100;
 const int error::unauthorized_execute = 101;
 const int error::singers_outdated = 102;
@@ -9,6 +10,8 @@ const int error::already_approved = 107;
 const int error::expired = 111;
 const int error::inconsistent_data = 108;
 const int error::invalid_dictionary_sequence = 103;
+const int error::invalid_threshold = 104;
+const int error::invalid_signers = 105;
 
 const int error::unknown_op = 0xffff;
 

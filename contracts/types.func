@@ -38,7 +38,7 @@ builder store_index(builder b, int index) inline {
     return b.store_uint(index, INDEX_SIZE);
 }
 
-const int ACTION_INDEX_SIZE = INDEX_SIZE;
+const int ACTION_INDEX_SIZE = 8;
 
 
 const int ORDER_SEQNO_SIZE = 32;
