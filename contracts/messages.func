@@ -12,14 +12,14 @@
 ;;_ (Message Any) = MessageAny;
 
 () send_message_with_only_body(slice to_address, int amount, builder body, int msg_flags, int send_mode) impure inline_ref {
-    int body_size = body.null?() ? 0 : body.builder_bits();
+    int body_bits = body.null?() ? 0 : body.builder_bits();
 
     builder msg = begin_cell()
         .store_msg_flags_and_address_none(msg_flags)
         .store_slice(to_address)
         .store_coins(amount);
 
-    if (body_size + msg.builder_bits() > CELL_BITS - MSG_ONLY_BODY_SIZE) {
+    if (body_bits + msg.builder_bits() > CELL_BITS - MSG_ONLY_BODY_SIZE) {
         ;; store body in ref
         msg = msg
         .store_only_body_ref(begin_cell().store_builder(body).end_cell());
@@ -34,14 +34,20 @@
 }
 
 () send_message_with_state_init_and_body(slice to_address, int amount, cell state_init, builder body, int msg_flags, int send_mode) impure inline_ref {
-    int body_size = body.null?() ? 0 : body.builder_bits();
+    int body_bits = 0;
+    int body_refs = 0;
+
+    if (~ body.null?()) {
+        body_bits = body.builder_bits();
+        body_refs = body.builder_refs();
+    }
 
     builder msg = begin_cell()
     .store_msg_flags_and_address_none(msg_flags)
     .store_slice(to_address)
     .store_coins(amount);
 
-    if (body_size + msg.builder_bits() > CELL_BITS - MSG_WITH_STATE_INIT_AND_BODY_SIZE) {
+    if ((body_bits + msg.builder_bits() > CELL_BITS - MSG_WITH_STATE_INIT_AND_BODY_SIZE) | (body_refs > 3)) {
         ;; store body in ref
         msg = msg
         .store_statinit_ref_and_body_ref(state_init, begin_cell().store_builder(body).end_cell());
