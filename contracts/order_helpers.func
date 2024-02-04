@@ -49,7 +49,7 @@ const int ORDER_STATE_CELL_OVERHEAD = 21;
 const int EXECUTE_ORDER_BIT_OVERHEAD = 440;
 const int EXECUTE_ORDER_CELL_OVERHEAD = 1;
 
-int calculate_order_processing_cost(cell order_body, int duration) {
+int calculate_order_processing_cost(cell order_body, cell signers, int duration) {
     {- There are following costs:
        1) Gas cost on Multisig contract
        2) Forward cost for Multisig->Order message
@@ -64,6 +64,7 @@ int calculate_order_processing_cost(cell order_body, int duration) {
     ;; and add difference to MULTISIG_INIT_ORDER_GAS
     int initial_gas = gas_consumed();
     (int order_cells, int order_bits, _) = compute_data_size(order_body, 2048);
+    (int signers_cells, int signers_bits, _) = compute_data_size(signers, 512);
     int size_counting_gas = gas_consumed() - initial_gas;
 
     int gas_fees = get_compute_fee(BASECHAIN,MULTISIG_INIT_ORDER_GAS + size_counting_gas) +
@@ -71,10 +72,16 @@ int calculate_order_processing_cost(cell order_body, int duration) {
     get_compute_fee(BASECHAIN, ORDER_EXECUTE_GAS) +
     get_compute_fee(BASECHAIN, MULTISIG_EXECUTE_GAS);
 
-    int forward_fees = get_forward_fee(BASECHAIN, INIT_ORDER_BIT_OVERHEAD + order_bits, INIT_ORDER_CELL_OVERHEAD + order_cells) +
-    get_forward_fee(BASECHAIN, EXECUTE_ORDER_BIT_OVERHEAD + order_bits, EXECUTE_ORDER_CELL_OVERHEAD + order_cells);
+    int forward_fees = get_forward_fee(BASECHAIN,
+                                       INIT_ORDER_CELL_OVERHEAD + order_cells + signers_bits,
+                                       INIT_ORDER_BIT_OVERHEAD + order_bits + signers_cells) +
+                       get_forward_fee(BASECHAIN,
+                                       EXECUTE_ORDER_CELL_OVERHEAD + order_cells,
+                                       EXECUTE_ORDER_BIT_OVERHEAD + order_bits);
 
 
-    int storage_fees = get_storage_fee(BASECHAIN, duration, order_bits, order_cells);
+    int storage_fees = get_storage_fee(BASECHAIN, duration,
+                                       ORDER_STATE_BIT_OVERHEAD + order_bits + signers_bits,
+                                       ORDER_STATE_CELL_OVERHEAD + order_cells  + signers_cells);
     return gas_fees + forward_fees + storage_fees;
 }

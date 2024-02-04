@@ -105,7 +105,7 @@ int validate_dictionary_sequence(cell dict) impure {
         throw_unless(error::unauthorized_new_order, equal_slices_bits(sender_address, expected_address));
         throw_unless(error::expired, expiration_date >= now());
 
-        int minimal_value = calculate_order_processing_cost(order_body, expiration_date - now());
+        int minimal_value = calculate_order_processing_cost(order_body, signers, expiration_date - now());
         throw_unless(error::not_enough_ton, msg_value >= minimal_value);
 
         cell state_init = calculate_order_state_init(my_address(), next_order_seqno);
@@ -168,7 +168,8 @@ int validate_dictionary_sequence(cell dict) impure {
 }
 
 int get_order_estimate(cell order, int expiration_date) method_id {
-    return calculate_order_processing_cost(order, expiration_date - now());
+    (_, _, cell signers, _, _, _) = load_data();
+    return calculate_order_processing_cost(order, signers, expiration_date - now());
 }
 
 slice get_order_address(int order_seqno) method_id {
