@@ -1,5 +1,5 @@
 import { Address, beginCell,  Cell, Dictionary, MessageRelaxed, storeMessageRelaxed, Contract, contractAddress, ContractProvider, Sender, SendMode, internal, toNano } from '@ton/core';
-import { Op } from "./Constants";
+import { Op, Params } from "./Constants";
 
 export type Module = {
     address: Address,
@@ -9,8 +9,7 @@ export type MultisigConfig = {
     threshold: number;
     signers: Array<Address>;
     proposers: Array<Address>;
-    modules: Array<Module>;
-    guard: Cell | null;
+    allowArbitrarySeqno:boolean;
 };
 
 export type TransferRequest = { type: 'transfer', sendMode:SendMode, message:MessageRelaxed};
@@ -18,9 +17,7 @@ export type UpdateRequest   = {
     type: 'update',
     threshold: number,
     signers: Array<Address>,
-    proposers: Array<Address>,
-    modules?: Cell, // TODO proper modules packaging
-    guard?: Cell
+    proposers: Array<Address>
 };
 
 export type Action = TransferRequest | UpdateRequest;
@@ -51,35 +48,31 @@ function cellToArray(addrDict: Cell | null) : Array<Address>  {
     return resArr;
 }
 
-/*
-    (int next_order_seqno, int threshold,
-        cell signers, int signers_num,
-        cell proposers,
-        cell modules, cell guard) = (ds~load_order_seqno(), ds~load_index(),
-        ds~load_dict(), ds~load_index(),
-        ds~load_dict(),
-        ds~load_dict(), ds~load_maybe_ref());
-*/
+
 export function multisigConfigToCell(config: MultisigConfig): Cell {
     return beginCell()
-                .storeUint(0, 32)
-                .storeUint(config.threshold, 8)
+                .storeUint(0, Params.bitsize.orderSeqno)
+                .storeUint(config.threshold, Params.bitsize.signerIndex)
                 .storeRef(beginCell().storeDictDirect(arrayToCell(config.signers)))
-                .storeUint(config.signers.length, 8)
+                .storeUint(config.signers.length, Params.bitsize.signerIndex)
                 .storeDict(arrayToCell(config.proposers))
-                .storeDict(moduleArrayToCell(config.modules))
-                .storeMaybeRef(config.guard)
+                .storeBit(config.allowArbitrarySeqno)
            .endCell();
 }
 
 export class Multisig implements Contract {
+    public orderSeqno: number;
 
     constructor(readonly address: Address,
                 readonly init?: { code: Cell; data: Cell },
-                readonly configuration?: MultisigConfig) {}
+                readonly configuration?: MultisigConfig) {
+      this.orderSeqno = 0;
+   }
 
     static createFromAddress(address: Address) {
-        return new Multisig(address);
+        let multisig = new Multisig(address);
+        multisig.orderSeqno = 0;
+        return multisig;
     }
 
     static createFromConfig(config: MultisigConfig, code: Cell, workchain = 0) {
@@ -92,25 +85,25 @@ export class Multisig implements Contract {
         await provider.internal(via, {
             value,
             sendMode: SendMode.PAY_GAS_SEPARATELY,
-            body: beginCell().storeUint(0, 32).storeUint(0, 64).endCell(),
+            body: beginCell().storeUint(0, Params.bitsize.op)
+                             .storeUint(0, Params.bitsize.queryId)
+                  .endCell(),
         });
     }
 
     static packTransferRequest(transfer: TransferRequest) {
         let message = beginCell().store(storeMessageRelaxed(transfer.message)).endCell();
-        return beginCell().storeUint(Op.actions.send_message, 32)
+        return beginCell().storeUint(Op.actions.send_message, Params.bitsize.op)
                           .storeUint(transfer.sendMode, 8)
                           .storeRef(message)
                .endCell();
 
     }
     static packUpdateRequest(update: UpdateRequest) {
-        return beginCell().storeUint(Op.actions.update_multisig_params, 32)
-                          .storeUint(update.threshold, 8)
+        return beginCell().storeUint(Op.actions.update_multisig_params, Params.bitsize.op)
+                          .storeUint(update.threshold, Params.bitsize.signerIndex)
                           .storeRef(beginCell().storeDictDirect(arrayToCell(update.signers)))
                           .storeDict(arrayToCell(update.proposers))
-                          .storeMaybeRef(update.modules)
-                          .storeMaybeRef(update.guard)
                .endCell();
     }
 
@@ -125,8 +118,8 @@ export class Multisig implements Contract {
                 message: internal({
                     to: address,
                     value: toNano('0.01'),
-                    body: beginCell().storeUint(Op.multisig.execute_internal, 32)
-                                     .storeUint(0, 64)
+                    body: beginCell().storeUint(Op.multisig.execute_internal, Params.bitsize.op)
+                                     .storeUint(0, Params.bitsize.queryId)
                                      .storeRef(req)
                           .endCell()
                 })
@@ -186,13 +179,15 @@ export class Multisig implements Contract {
                            expirationDate: number,
                            isSigner: boolean,
                            addrIdx: number,
+                           order_id: number = 0,
                            query_id: number | bigint = 0) {
 
-       const msgBody = beginCell().storeUint(Op.multisig.new_order, 32)
-                                  .storeUint(query_id, 64)
+       const msgBody = beginCell().storeUint(Op.multisig.new_order, Params.bitsize.op)
+                                  .storeUint(query_id, Params.bitsize.queryId)
+                                  .storeUint(order_id, Params.bitsize.orderSeqno)
                                   .storeBit(isSigner)
-                                  .storeUint(addrIdx, 8)
-                                  .storeUint(expirationDate, 48)
+                                  .storeUint(addrIdx, Params.bitsize.signerIndex)
+                                  .storeUint(expirationDate, Params.bitsize.time)
 
         if(actions instanceof Cell) {
             return msgBody.storeRef(actions).endCell();
@@ -206,7 +201,7 @@ export class Multisig implements Contract {
     }
     async sendNewOrder(provider: ContractProvider, via: Sender,
            actions: Order | Cell,
-           expirationDate: number, value: bigint = 200000000n, addrIdx?: number, isSigner?: boolean ) {
+           expirationDate: number, value: bigint = 200000000n, addrIdx?: number, isSigner?: boolean) {
 
         if(this.configuration === undefined) {
             throw new Error("Configuration is not set: use createFromConfig or loadConfiguration");
@@ -244,9 +239,9 @@ export class Multisig implements Contract {
         await provider.internal(via, {
             sendMode: SendMode.PAY_GAS_SEPARATELY,
             value,
-            body: Multisig.newOrderMessage(newActions, expirationDate, isSigner, addrIdx, 1)
+            body: Multisig.newOrderMessage(newActions, expirationDate, isSigner, addrIdx, this.orderSeqno, 1)
         });
-
+        this.orderSeqno += 1;
         //console.log(await provider.get("get_order_address", []));
     }
 
@@ -267,8 +262,6 @@ export class Multisig implements Contract {
         const threshold = stack.readBigNumber();
         const signers = cellToArray(stack.readCellOpt());
         const proposers = cellToArray(stack.readCellOpt());
-        const modules = stack.readCellOpt();
-        const guard = stack.readCellOpt();
-        return { nextOrderSeqno, threshold, signers, proposers, modules, guard };
+        return { nextOrderSeqno, threshold, signers, proposers};
     }
 }

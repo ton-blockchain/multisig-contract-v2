@@ -5,7 +5,7 @@ import { Order } from '../wrappers/Order';
 import '@ton/test-utils';
 import { compile } from '@ton/blueprint';
 import { randomAddress, findTransactionRequired, findTransaction} from '@ton/test-utils';
-import { Op, Errors } from '../wrappers/Constants';
+import { Op, Errors, Params } from '../wrappers/Constants';
 import { getRandomInt, differentAddress, Txiterator, executeTill, executeFrom} from './utils';
 
 describe('Multisig', () => {
@@ -31,15 +31,13 @@ describe('Multisig', () => {
             threshold: 1,
             signers: [deployer.address],
             proposers: [proposer.address],
-            modules: [],
-            guard: null,
+            allowArbitrarySeqno: false,
         };
 
         testAddr = randomAddress();
         testMsg = { type: "transfer", sendMode: 1, message: internal_relaxed({to: testAddr, value: toNano('0.015'), body: beginCell().storeUint(12345, 32).endCell()})};
 
         multisig = blockchain.openContract(Multisig.createFromConfig(config, code));
-
         const deployResult = await multisig.sendDeploy(deployer.getSender(), toNano('0.05'));
 
         expect(deployResult.transactions).toHaveTransaction({
@@ -225,8 +223,7 @@ describe('Multisig', () => {
             threshold: signersNum - getRandomInt(1, 5),
             signers: signers.map(s => s.address),
             proposers: proposers.map(p => p.address),
-            modules: [],
-            guard: null,
+            allowArbitrarySeqno: false,
         };
 
         const testMultisig = blockchain.openContract(Multisig.createFromConfig(config, code));
@@ -310,7 +307,10 @@ describe('Multisig', () => {
                 from: deployer.address,
                 to: orderAddress,
                 value: toNano('1'),
-                body: beginCell().storeUint(Op.order.approve, 32).storeUint(0, 64).storeUint(0,8).endCell()
+                body: beginCell().storeUint(Op.order.approve, Params.bitsize.op)
+                                 .storeUint(0, Params.bitsize.queryId)
+                                 .storeUint(0, Params.bitsize.signerIndex)
+                                 .endCell()
         }));
 
         const orderContract = blockchain.openContract(Order.createFromAddress(orderAddress));
@@ -466,6 +466,7 @@ describe('Multisig', () => {
             proposers: []
         };
         let initialSeqno = (await multisig.getMultisigData()).nextOrderSeqno;
+        //todo adjust for new order seqno behavior
         let res = await multisig.sendNewOrder(deployer.getSender(), [updOrder], Math.floor(Date.now() / 1000 + 1000));
 
         expect((await multisig.getMultisigData()).nextOrderSeqno).toEqual(initialSeqno + 1n);
@@ -493,12 +494,10 @@ describe('Multisig', () => {
         malformed.set(0, randomAddress());
         malformed.set(2, randomAddress());
         let updateCell = beginCell().storeUint(Op.actions.update_multisig_params, 32)
-                   .storeUint(4, 8)
-                   .storeDict(malformed) // signers
-                   .storeDict(null) // empty proposers
-                   .storeDict(null) // empty modules
-                   .storeMaybeRef(null) // empty guard.
-        .endCell();
+                                    .storeUint(4, 8)
+                                    .storeDict(malformed) // signers
+                                    .storeDict(null) // empty proposers
+                         .endCell();
 
         const orderDict = Dictionary.empty(Dictionary.Keys.Uint(8), Dictionary.Values.Cell());
         orderDict.set(0, updateCell);
@@ -525,8 +524,6 @@ describe('Multisig', () => {
         expect(dataAfter.threshold).toEqual(dataBefore.threshold);
         expect(dataAfter.signers.map(stringify)).toEqual(dataBefore.signers.map(stringify));
         expect(dataAfter.proposers.map(stringify)).toEqual(dataBefore.proposers.map(stringify));
-        expect(dataAfter.modules).toEqual(dataBefore.modules);
-        expect(dataAfter.guard).toEqual(dataBefore.guard);
 
         dataBefore   = await multisig.getMultisigData();
         orderAddress = await multisig.getOrderAddress(dataBefore.nextOrderSeqno);
@@ -541,8 +538,6 @@ describe('Multisig', () => {
                                 .storeUint(4, 8)
                                 .storeDict(null) // Empty signers? Yes, that is allowed
                                 .storeDict(malformed) // proposers
-                                .storeDict(null) // modules
-                                .storeMaybeRef(null)  // guard
                      .endCell();
 
         // All over again
@@ -566,8 +561,6 @@ describe('Multisig', () => {
         expect(dataAfter.threshold).toEqual(dataBefore.threshold);
         expect(dataAfter.signers.map(stringify)).toEqual(dataBefore.signers.map(stringify));
         expect(dataAfter.proposers.map(stringify)).toEqual(dataBefore.proposers.map(stringify));
-        expect(dataAfter.modules).toEqual(dataBefore.modules);
-        expect(dataAfter.guard).toEqual(dataBefore.guard);
     });
     it('should accept execute internal only from self address', async () => {
         const nobody = await blockchain.treasury('nobody');
@@ -586,8 +579,8 @@ describe('Multisig', () => {
 
         const order_dict = Dictionary.empty(Dictionary.Keys.Uint(8), Dictionary.Values.Cell());
         order_dict.set(0, Multisig.packTransferRequest(testReq));
-        const testBody = beginCell().storeUint(Op.multisig.execute_internal, 32)
-                                    .storeUint(0, 64)
+        const testBody = beginCell().storeUint(Op.multisig.execute_internal, Params.bitsize.op)
+                                    .storeUint(0, Params.bitsize.queryId)
                                     .storeRef(beginCell().storeDictDirect(order_dict).endCell())
                          .endCell();
 
@@ -631,8 +624,8 @@ describe('Multisig', () => {
             message: internal_relaxed({
             to: multisig.address,
             value: toNano('0.01'),
-            body: beginCell().storeUint(Op.multisig.execute_internal, 32)
-                            .storeUint(0, 64)
+            body: beginCell().storeUint(Op.multisig.execute_internal, Params.bitsize.op)
+                            .storeUint(0, Params.bitsize.queryId)
                             .storeRef(beginCell().storeDictDirect(order_dict).endCell())
                   .endCell()
             })
@@ -766,8 +759,7 @@ describe('Multisig', () => {
             threshold: 1,
             signers: [coolHacker.address], // So deployment init is same except just one field (so still different address)
             proposers: [proposer.address],
-            modules: [],
-            guard: null
+            allowArbitrarySeqno : false
         };
 
         const evilMultisig = blockchain.openContract(Multisig.createFromConfig(newConfig,code));
@@ -803,11 +795,11 @@ describe('Multisig', () => {
             message: internal_relaxed({
             to: multisig.address,
             value: toNano('0.01'),
-            body: beginCell().storeUint(Op.multisig.execute, 32)
-                            .storeUint(0, 64)
-                            .storeUint(legitData.nextOrderSeqno, 32)
-                            .storeUint(0xffffffffffff, 48)
-                            .storeUint(0xff, 8)
+            body: beginCell().storeUint(Op.multisig.execute, Params.bitsize.op)
+                            .storeUint(0, Params.bitsize.queryId)
+                            .storeUint(legitData.nextOrderSeqno, Params.bitsize.orderSeqno)
+                            .storeUint(0xffffffffffff, Params.bitsize.time)
+                            .storeUint(0xff, Params.bitsize.signerIndex)
                             .storeUint(BigInt('0x' + beginCell().storeDictDirect(mock_signers).endCell().hash().toString('hex')), 256) // pack legit hash
                             .storeRef(beginCell().storeDictDirect(order_dict).endCell()) // Finally eval payload
                   .endCell()
@@ -883,4 +875,3 @@ describe('Multisig', () => {
         }
     });
 });
-// TODO EXPERIMENTAL AND MORE VERBOSE GUARANTEES CASES

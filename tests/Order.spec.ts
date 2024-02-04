@@ -1,6 +1,6 @@
 import { Address, beginCell, Cell, internal as internal_relaxed, toNano } from '@ton/core';
 import { Order, OrderConfig } from '../wrappers/Order';
-import { Op, Errors } from "../wrappers/Constants";
+import { Op, Errors, Params } from "../wrappers/Constants";
 import '@ton/test-utils';
 import { compile } from '@ton/blueprint';
 import { findTransactionRequired, randomAddress } from '@ton/test-utils';

@@ -42,20 +42,6 @@ All fees on processing order (except order execution itself): creation Order con
 
 Besides transfers, Order may also contain Multisig Update Requests
 
-## Experimental features
-Basic Multisignature wallet **does not require** experimental features.
-
-By default experimental features are off and can not be activated after Multisignature wallet deploy. Being disabled, experimental features does not interfere with main functionality in any way.
-
-### Module
-Module (following Modules design for [Safe Modules](https://docs.safe.global/safe-smart-account/modules)) add custom features to Multisignature wallet. Module is smart contracts that add functionality while separating module logic from Multisignature wallet. A basic Multisignature wallet **does not require** any modules. Adding and removing a module requires confirmation from the configured threshold number of owners. **Module can provide arbitrary logic, including bypassing security of Multisignature wallet core, do not add Module to the Multisignature wallet if you do not build Module yourself**. Security of Multisignature wallet with added Module must be considered in aggregate, aside from security of Multisignature core.
-
-### Guard
-Guard is used when there are restrictions on top of the n-out-of-m scheme. Guard checks are executed at the end of Computation phase: thus after messages and storage updates are prepared, but prior to any messages being sent or storage is updated. Guard has it's own storage which can be used to make history-based checks. Basic Multisignature wallet **does not require** Guard. Adding and removing a Guard requires confirmation from the configured threshold number of owners. **Guard can provide arbitrary logic, including bypassing security of Multisignature wallet core, do not add Guard to the Multisignature wallet if you do not build Guard yourself**. Security of Multisignature wallet with added Guard must be considered in aggregate, aside from security of Multisignature core.
-
-Important: Since a Guard has full power to block Order execution, a broken Guard can cause a denial of service for a Multisignature wallet. Make sure to audit the Guard code and pay attention to recovery mechanisms.
-
-
 
 
 ## Project structure

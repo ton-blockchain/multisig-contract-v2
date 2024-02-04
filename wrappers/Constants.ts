@@ -35,4 +35,13 @@ export abstract class Errors {
     }
 };
 
-
+export abstract class Params {
+    static readonly bitsize = {
+       op : 32,
+       queryId : 64,
+       orderSeqno : 256,
+       signerIndex : 8,
+       actionIndex : 8,
+       time: 48
+    }
+}

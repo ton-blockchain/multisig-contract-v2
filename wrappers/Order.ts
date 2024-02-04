@@ -1,5 +1,5 @@
 import { Address, beginCell,  Cell, Builder, BitString, Dictionary, Contract, contractAddress, ContractProvider, Sender, SendMode, toNano } from '@ton/core';
-import { Op } from "./Constants";
+import { Op, Params } from "./Constants";
 
 export type OrderConfig = {
     multisig: Address,
@@ -26,7 +26,7 @@ function cellToArray(addrDict: Cell | null) : Array<Address>  {
 export function orderConfigToCell(config: OrderConfig): Cell {
     return beginCell()
                 .storeAddress(config.multisig)
-                .storeUint(config.orderSeqno, 32)
+                .storeUint(config.orderSeqno, Params.bitsize.orderSeqno)
            .endCell();
 }
 
@@ -55,17 +55,17 @@ export class Order implements Contract {
                         query_id : number | bigint = 0)   {
 
        const msgBody = beginCell()
-                .storeUint(Op.order.init, 32)
-                .storeUint(query_id, 64)
-                .storeUint(threshold, 8)
+                .storeUint(Op.order.init, Params.bitsize.op)
+                .storeUint(query_id, Params.bitsize.queryId)
+                .storeUint(threshold, Params.bitsize.signerIndex)
                 .storeRef(beginCell().storeDictDirect(arrayToCell(signers)))
-                .storeUint(signers.length, 8)
-                .storeUint(expiration_date, 48)
+                .storeUint(signers.length, Params.bitsize.signerIndex)
+                .storeUint(expiration_date, Params.bitsize.time)
                 .storeRef(order)
                 .storeBit(approve_on_init);
 
        if(approve_on_init) {
-           msgBody.storeUint(signer_idx, 8);
+           msgBody.storeUint(signer_idx, Params.bitsize.signerIndex);
        }
 
        return msgBody.endCell();
@@ -94,9 +94,9 @@ export class Order implements Contract {
             value,
             sendMode: SendMode.PAY_GAS_SEPARATELY,
             body: beginCell()
-                    .storeUint(Op.order.approve, 32)
-                    .storeUint(query_id, 64)
-                    .storeUint(signer_idx, 8)
+                    .storeUint(Op.order.approve, Params.bitsize.op)
+                    .storeUint(query_id, Params.bitsize.queryId)
+                    .storeUint(signer_idx, Params.bitsize.signerIndex)
                   .endCell()
         });
     }
