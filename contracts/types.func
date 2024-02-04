@@ -41,7 +41,7 @@ builder store_index(builder b, int index) inline {
 const int ACTION_INDEX_SIZE = 8;
 
 
-const int ORDER_SEQNO_SIZE = 32;
+const int ORDER_SEQNO_SIZE = 256;
 
 (slice, int) ~load_order_seqno(slice s) inline {
     return s.load_uint(ORDER_SEQNO_SIZE);
