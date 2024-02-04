@@ -100,21 +100,31 @@ cell order) impure inline {
     if (op == 0) {
         ;; message with text comment
         ;; todo: some wallets send text body in ref
+        if(in_msg_body.slice_refs()) { ;;combine comment into one slice
+            builder combined_string = begin_cell();
+            do {
+                ;; store all bits from current cell
+                ;; it's ok to overflow here, it means that comment is incorrect
+                combined_string.store_slice(in_msg_body.preload_bits(in_msg_body.slice_bits()));
+                ;;and go to the next
+                in_msg_body = in_msg_body.preload_ref().begin_parse();
+            } until (~ in_msg_body.slice_refs());
+            in_msg_body = combined_string.end_cell().begin_parse();
+        }
         throw_unless(error::unknown_op,
-            equal_slices_bits(in_msg_body, "approve") &
-            (in_msg_body.slice_refs() == 0));
+                     equal_slices_bits(in_msg_body, "approve"));
 
         ;; lets find signer in the signers dict
         int found_signer? = false;
         do {
-            (signer_index, slice value, int found?) = signers.udict_get_next?(INDEX_SIZE, signer_index);
-            if (found?) {
+            (signer_index, slice value, int next_found?) = signers.udict_get_next?(INDEX_SIZE, signer_index);
+            if (next_found?) {
                 if (equal_slices_bits(sender_address, value)) {
-                    found? = false;
                     found_signer? = true;
+                    next_found? = false; ;; fast way to exit loop
                 }
             }
-        } until (~ found?);
+        } until (~ next_found?);
 
         throw_unless(error::unauthorized_sign, found_signer?);
 
@@ -145,38 +155,14 @@ cell order) impure inline {
             need_check_threshold? = true;
         }
     } elseif (op == op::approve) {
-        if (expiration_date < now()) {
-            send_message_with_only_body(
-                sender_address,
-                0,
-                begin_cell().store_op_and_query_id(op::expired, query_id),
-                NON_BOUNCEABLE,
-                SEND_MODE_CARRY_ALL_REMAINING_MESSAGE_VALUE | SEND_MODE_BOUNCE_ON_ACTION_FAIL
-            );
-
-            send_message_with_only_body(;; todo: why send to multisig?
-                multisig_address,
-                0,
-                begin_cell().store_op_and_query_id(op::expired, query_id),
-                NON_BOUNCEABLE,
-                SEND_MODE_IGNORE_ERRORS | SEND_MODE_CARRY_ALL_BALANCE | SEND_MODE_BOUNCE_ON_ACTION_FAIL
-            );
-        } elseif (executed?) {
-
-            send_message_with_only_body( ;; todo: why not error?
-                sender_address,
-                0,
-                begin_cell().store_op_and_query_id(op::already_executed, query_id),
-                NON_BOUNCEABLE,
-                SEND_MODE_CARRY_ALL_REMAINING_MESSAGE_VALUE | SEND_MODE_BOUNCE_ON_ACTION_FAIL
-            );
-        } else {
-            if (signer_index == -1) {
-                signer_index = in_msg_body~load_index();
-                (slice signer, int found?) = signers.udict_get?(INDEX_SIZE, signer_index);
-                throw_unless(error::unauthorized_sign, found?);
-                throw_unless(error::unauthorized_sign, equal_slices_bits(sender_address, signer));
-            }
+        try {
+            throw_if(error::expired, now() > expiration_date);
+            throw_if(error::already_executed, executed?);
+             if (signer_index == -1) {
+                    signer_index = in_msg_body~load_index();
+                    (slice signer, int found?) = signers.udict_get?(INDEX_SIZE, signer_index);
+                    throw_unless(error::unauthorized_sign, found? & equal_slices_bits(sender_address, signer));
+             }
 
             (approvals_mask, approvals_num)~add_approval(signer_index);
             need_check_threshold? = true;
@@ -186,6 +172,15 @@ cell order) impure inline {
                 begin_cell().store_op_and_query_id(op::approve_accepted, query_id),
                 NON_BOUNCEABLE,
                 SEND_MODE_CARRY_ALL_REMAINING_MESSAGE_VALUE | SEND_MODE_BOUNCE_ON_ACTION_FAIL
+            );
+        } catch ( _, exit_code) {
+            send_message_with_only_body(
+                    sender_address,
+                    0,
+                    begin_cell().store_op_and_query_id(op::approve_rejected, query_id)
+                                .store_uint(exit_code, 32),
+                    NON_BOUNCEABLE,
+                    SEND_MODE_CARRY_ALL_REMAINING_MESSAGE_VALUE | SEND_MODE_BOUNCE_ON_ACTION_FAIL
             );
         }
     } else {
