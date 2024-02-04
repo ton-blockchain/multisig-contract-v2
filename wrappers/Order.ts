@@ -59,7 +59,6 @@ export class Order implements Contract {
                 .storeUint(query_id, Params.bitsize.queryId)
                 .storeUint(threshold, Params.bitsize.signerIndex)
                 .storeRef(beginCell().storeDictDirect(arrayToCell(signers)))
-                .storeUint(signers.length, Params.bitsize.signerIndex)
                 .storeUint(expiration_date, Params.bitsize.time)
                 .storeRef(order)
                 .storeBit(approve_on_init);
@@ -105,7 +104,7 @@ export class Order implements Contract {
     async getOrderData(provider: ContractProvider) {
        /*
        (slice multisig, int order_seqno, int threshold,
-                     int executed?, cell signers, int signers_num,
+                     int executed?, cell signers,
                      int approvals, int approvals_num, int expiration_date,
                      cell order)
        */
@@ -115,15 +114,14 @@ export class Order implements Contract {
        const threshold = stack.readNumberOpt();
        const executed = stack.readBooleanOpt();
        const signers = cellToArray(stack.readCellOpt());
-       const signers_num = stack.readNumberOpt();
        const approvals = stack.readBigNumberOpt();
        const approvals_num = stack.readNumberOpt();
        const expiration_date = stack.readBigNumberOpt();
        const order = stack.readCellOpt();
        let approvalsArray: Array<boolean>;
-       if(signers_num !== null && approvals !== null) {
-        approvalsArray = Array(signers_num);
-        for(let i = 0; i < signers_num; i++) {
+       if(approvals !== null) {
+        approvalsArray = Array(256);
+        for(let i = 0; i < 256; i++) {
             approvalsArray[i] = Boolean((1n << BigInt(i)) & approvals);
         }
        }
@@ -131,7 +129,7 @@ export class Order implements Contract {
            approvalsArray = [];
        }
        return {
-              inited: threshold !== null, multisig, order_seqno, threshold, executed, signers, signers_num,
+              inited: threshold !== null, multisig, order_seqno, threshold, executed, signers,
               approvals: approvalsArray, approvals_num: approvals_num, _approvals : approvals, expiration_date, order
        };
     }

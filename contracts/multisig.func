@@ -114,7 +114,6 @@ int validate_dictionary_sequence(cell dict) impure {
         .store_op_and_query_id(op::init, query_id)
         .store_index(threshold)
         .store_nonempty_dict(signers)
-        .store_index(signers_num)
         .store_timestamp(expiration_date)
         .store_ref(order_body)
         .store_bool(signer?);

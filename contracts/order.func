@@ -13,18 +13,17 @@
     return ((approvals_mask, approvals_num), ());
 }
 
-(slice, int, int, int, cell, int, int, int, int, cell) load_data() {
+(slice, int, int, int, cell, int, int, int, cell) load_data() {
     slice ds = get_data().begin_parse();
     (slice multisig_address, int order_seqno) = (ds~load_msg_addr(), ds~load_order_seqno());
 
     if (ds.slice_bits() == 0) {
-        return (multisig_address, order_seqno, null(), null(), null(), null(), null(), null(), null(), null());
+        return (multisig_address, order_seqno, null(), null(), null(), null(), null(), null(), null());
     }
 
     (int threshold,
         int executed?,
         cell signers,
-        int signers_num, ;; todo: unused
         int approvals_mask,
         int approvals_num,
         int expiration_date,
@@ -32,7 +31,6 @@
         ds~load_index(), ;; threshold
         ds~load_bool(), ;; executed?,
         ds~load_nonempty_dict(), ;; signers
-        ds~load_index(), ;; signers_num
         ds~load_uint(MASK_SIZE), ;; approvals_mask
         ds~load_index(), ;; approvals_num
         ds~load_timestamp(), ;; expiration_date
@@ -46,7 +44,6 @@
         threshold,
         executed?,
         signers,
-        signers_num,
         approvals_mask,
         approvals_num,
         expiration_date,
@@ -59,7 +56,6 @@ int order_seqno,
 int threshold,
 int executed?,
 cell signers,
-int signers_num,
 int approvals_mask,
 int approvals_num,
 int expiration_date,
@@ -71,7 +67,6 @@ cell order) impure inline {
         .store_index(threshold)
         .store_bool(executed?)
         .store_nonempty_dict(signers)
-        .store_index(signers_num)
         .store_uint(approvals_mask, MASK_SIZE)
         .store_index(approvals_num)
         .store_timestamp(expiration_date)
@@ -93,7 +88,7 @@ cell order) impure inline {
     int signer_index = -1;
 
     (slice multisig_address, int order_seqno, int threshold,
-        int executed?, cell signers, int signers_num,
+        int executed?, cell signers,
         int approvals_mask, int approvals_num, int expiration_date,
         cell order) = load_data();
 
@@ -142,7 +137,6 @@ cell order) impure inline {
         threshold = in_msg_body~load_index();
         executed? = false;
         signers = in_msg_body~load_nonempty_dict();
-        signers_num = in_msg_body~load_index();
         approvals_mask = 0;
         approvals_num = 0;
         expiration_date = in_msg_body~load_timestamp();
@@ -205,7 +199,7 @@ cell order) impure inline {
         executed? = true;
     }
     save_data(multisig_address, order_seqno, threshold,
-        executed?, signers, signers_num,
+        executed?, signers,
         approvals_mask, approvals_num, expiration_date,
         order);
 }

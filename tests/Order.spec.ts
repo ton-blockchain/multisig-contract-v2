@@ -67,7 +67,6 @@ describe('Order', () => {
         expect(orderData.expiration_date).toEqual(BigInt(expDate));
         expect(orderData.approvals_num).toBe(0); // Number of approvals
         expect(orderData._approvals).toBe(0n); // Approvals raw bitmask
-        expect(orderData.signers_num).toEqual(signers.length);
         expect(orderData.signers.map(stringify)).toEqual(signers.map(s => stringify(s.address)));
         expect(orderData.threshold).toBe(5);
         expect(orderData.executed).toBe(false);
