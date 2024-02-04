@@ -42,6 +42,8 @@ const int ACTION_INDEX_SIZE = 8;
 
 
 const int ORDER_SEQNO_SIZE = 256;
+;; this construction needed to always fit int257
+const int MAX_ORDER_SEQNO = -(((-1) << ORDER_SEQNO_SIZE) + 1);
 
 (slice, int) ~load_order_seqno(slice s) inline {
     return s.load_uint(ORDER_SEQNO_SIZE);

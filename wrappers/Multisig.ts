@@ -179,7 +179,7 @@ export class Multisig implements Contract {
                            expirationDate: number,
                            isSigner: boolean,
                            addrIdx: number,
-                           order_id: number = 0,
+                           order_id: bigint = 115792089237316195423570985008687907853269984665640564039457584007913129639935n,
                            query_id: number | bigint = 0) {
 
        const msgBody = beginCell().storeUint(Op.multisig.new_order, Params.bitsize.op)
@@ -239,9 +239,8 @@ export class Multisig implements Contract {
         await provider.internal(via, {
             sendMode: SendMode.PAY_GAS_SEPARATELY,
             value,
-            body: Multisig.newOrderMessage(newActions, expirationDate, isSigner, addrIdx, this.orderSeqno, 1)
+            body: Multisig.newOrderMessage(newActions, expirationDate, isSigner, addrIdx)
         });
-        this.orderSeqno += 1;
         //console.log(await provider.get("get_order_address", []));
     }
 

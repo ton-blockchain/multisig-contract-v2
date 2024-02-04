@@ -94,7 +94,12 @@ int validate_dictionary_sequence(cell dict) impure {
 
     if (op == op::new_order) {
         int order_seqno = in_msg_body~load_order_seqno();
-        throw_unless(error::invalid_new_order, allow_arbitrary_order_seqno | (order_seqno == next_order_seqno));
+        if (allow_arbitrary_order_seqno == false) {
+            order_seqno = (order_seqno == MAX_ORDER_SEQNO) ? next_order_seqno : order_seqno;
+            throw_unless(error::invalid_new_order, (order_seqno == next_order_seqno));
+            next_order_seqno += 1;
+        }
+
 
         int signer? = in_msg_body~load_bool();
         int index = in_msg_body~load_index();
@@ -108,7 +113,7 @@ int validate_dictionary_sequence(cell dict) impure {
         int minimal_value = calculate_order_processing_cost(order_body, signers, expiration_date - now());
         throw_unless(error::not_enough_ton, msg_value >= minimal_value);
 
-        cell state_init = calculate_order_state_init(my_address(), next_order_seqno);
+        cell state_init = calculate_order_state_init(my_address(), order_seqno);
         slice order_address = calculate_address_by_state_init(BASECHAIN, state_init);
         builder init_body = begin_cell()
         .store_op_and_query_id(op::init, query_id)
@@ -128,7 +133,7 @@ int validate_dictionary_sequence(cell dict) impure {
             BOUNCEABLE,
             SEND_MODE_CARRY_ALL_REMAINING_MESSAGE_VALUE | SEND_MODE_BOUNCE_ON_ACTION_FAIL
         );
-        next_order_seqno += 1;
+
     } elseif (op == op::execute) {
         ;; check that sender is order smart-contract and check that it has recent
         ;; signers dict
