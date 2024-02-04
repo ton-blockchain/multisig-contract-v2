@@ -132,23 +132,37 @@ cell order) impure inline {
     int need_check_threshold? = false;
     if (op == op::init) {
         throw_unless(error::unauthorized_init, equal_slices_bits(sender_address, multisig_address));
-        throw_unless(error::already_inited, null?(threshold)); ;; todo: already_inited but approve_on_init
-        ;; Let's init
-        threshold = in_msg_body~load_index();
-        executed? = false;
-        signers = in_msg_body~load_nonempty_dict();
-        approvals_mask = 0;
-        approvals_num = 0;
-        expiration_date = in_msg_body~load_timestamp();
-        throw_unless(error::expired, expiration_date >= now());
-        order = in_msg_body~load_ref();
-        int approve_on_init? = in_msg_body~load_bool();
-        if (approve_on_init?) {
-            int init_signer_index = in_msg_body~load_index();
-            (approvals_mask, approvals_num)~add_approval(init_signer_index);
-            need_check_threshold? = true;
+        if(null?(threshold)) {
+            ;; Let's init
+            threshold = in_msg_body~load_index();
+            executed? = false;
+            signers = in_msg_body~load_nonempty_dict();
+            approvals_mask = 0;
+            approvals_num = 0;
+            expiration_date = in_msg_body~load_timestamp();
+            throw_unless(error::expired, expiration_date >= now());
+            order = in_msg_body~load_ref();
+            int approve_on_init? = in_msg_body~load_bool();
+            if (approve_on_init?) {
+                int init_signer_index = in_msg_body~load_index();
+                (approvals_mask, approvals_num)~add_approval(init_signer_index);
+                need_check_threshold? = true;
+            }
+        } else {
+            ;; order is inited second time, if it is inited by another oracle
+            ;; we count it as approval
+            op = op::approve;
+            ;; skip unused fields and leave only init_signer_index in in_msg_body
+            in_msg_body~load_index();
+            in_msg_body~load_nonempty_dict();
+            in_msg_body~load_timestamp();
+            in_msg_body~skip_ref();
+            int approve_on_init? = in_msg_body~load_bool();
+            throw_unless(error::already_inited, approve_on_init?);
+            ;; now next branch (op == op::approve) is ready to process vote
         }
-    } elseif (op == op::approve) {
+    }
+    if (op == op::approve) {
         try {
             throw_if(error::expired, now() > expiration_date);
             throw_if(error::already_executed, executed?);
