@@ -1,4 +1,4 @@
-import { Address, beginCell, Cell, internal as internal_relaxed, toNano } from '@ton/core';
+import { Address, beginCell, Cell, internal as internal_relaxed, toNano, Transaction } from '@ton/core';
 import { Order, OrderConfig } from '../wrappers/Order';
 import { Op, Errors, Params } from "../wrappers/Constants";
 import '@ton/test-utils';
@@ -7,6 +7,12 @@ import { findTransactionRequired, randomAddress } from '@ton/test-utils';
 import { Blockchain, BlockchainSnapshot, SandboxContract, TreasuryContract, internal } from '@ton/sandbox';
 import { differentAddress, getMsgPrices, getRandomInt, storageCollected, computedGeneric } from './utils';
 import { Multisig, TransferRequest } from '../wrappers/Multisig';
+
+type ApproveResponse = {
+    status: number,
+    query_id: bigint,
+    exit_code?: number
+};
 
 describe('Order', () => {
     let code: Cell;
@@ -20,6 +26,11 @@ describe('Order', () => {
     let prevState: BlockchainSnapshot;
     let prices : ReturnType<typeof getMsgPrices>;
     let getContractData : (addr: Address) => Promise<Cell>;
+
+    let testPartial : (cmp: any, match: any) => boolean;
+    let testApproveResponse : (body: Cell, match:Partial<ApproveResponse>) => boolean;
+    let testApprove: (txs: Transaction[], from: Address, to: Address,
+                      exp: number, query_id?: number | bigint) => void;
 
     beforeAll(async () => {
         code =await compile('Order');
@@ -47,6 +58,83 @@ describe('Order', () => {
           if(!smc.account.account.storage.state.state.data)
             throw("Data is not present");
           return smc.account.account.storage.state.state.data
+        }
+        testPartial = (cmp: any, match: any) => {
+            for (let key in match) {
+                if(!(key in cmp)) {
+                    throw Error(`Unknown key ${key} in ${cmp}`);
+                }
+
+                if(match[key] instanceof Address) {
+                    if(!(cmp[key] instanceof Address)) {
+                        return false
+                    }
+                    if(!(match[key] as Address).equals(cmp[key])) {
+                        return false
+                    }
+                }
+                else if(match[key] instanceof Cell) {
+                    if(!(cmp[key] instanceof Cell)) {
+                        return false;
+                    }
+                    if(!(match[key] as Cell).equals(cmp[key])) {
+                        return false;
+                    }
+                }
+                else if(match[key] !== cmp[key]){
+                    return false;
+                }
+            }
+            return true;
+        }
+        testApproveResponse = (body, match) => {
+            let exitCode: number;
+            const ds = body.beginParse();
+            const approveStatus = ds.loadUint(32);
+            const cmp: ApproveResponse = {
+                status: approveStatus,
+                query_id: ds.loadUintBig(64),
+                exit_code: approveStatus == Op.order.approve_rejected ? ds.loadUint(32) : undefined
+            };
+            return testPartial(cmp, match);
+        }
+        testApprove = (txs, from, on, exp) => {
+            let expStatus: number;
+            let exitCode: number | undefined;
+
+            const approveTx = findTransactionRequired(txs, {
+                from,
+                on,
+                op: Op.order.approve,
+                success: true,
+                outMessagesCount: (x) => x >= 1
+            });
+            const inMsg = approveTx.inMessage!;
+            if(inMsg.info.type !== "internal")
+                throw new Error("Can't be");
+
+            const inQueryId = inMsg.body.beginParse().skip(32).preloadUintBig(64);
+            const inValue   = inMsg.info.value;
+
+            if(exp == 0) {
+                expStatus    = Op.order.approved;
+                exitCode = undefined;
+            }
+            else {
+                expStatus    = Op.order.approve_rejected;
+                exitCode = exp;
+            }
+            expect(txs).toHaveTransaction({
+                // Response message
+                from: on,
+                on: from,
+                body: (x) => testApproveResponse(x!, {
+                    status: expStatus,
+                    query_id: inQueryId,
+                    exit_code: exitCode
+                }),
+                value: inValue.coins - prices.lumpPrice - computedGeneric(approveTx).gasFees
+            })
         }
 
 
@@ -191,18 +279,7 @@ describe('Order', () => {
             const res = await orderContract.sendApprove(signerWallet.getSender(), signerIdx);
             const thresholdHit = i == threshold - 1;
 
-            expect(res.transactions).toHaveTransaction({
-                from: signerWallet.address,
-                to: orderContract.address,
-                success: true,
-                outMessagesCount: thresholdHit ? 2 : 1
-            });
-
-            expect(res.transactions).toHaveTransaction({
-                from: orderContract.address,
-                to: signerWallet.address,
-                op: Op.order.approved
-            });
+            testApprove(res.transactions, signerWallet.address, orderContract.address, 0);
 
             const orderData = await orderContract.getOrderData();
 
@@ -326,21 +403,18 @@ describe('Order', () => {
     it('should accept approval only from signers', async () => {
         let signerIdx  = getRandomInt(0, signers.length - 1);
 
-        const rndSigner = signers[signerIdx];
-        const notSigner = differentAddress(signers[signerIdx].address);
+        const rndSigner  = signers[signerIdx];
+        const notSigner  = differentAddress(signers[signerIdx].address);
+        const msgVal     = toNano('0.1');
+        // Query id match is important in that case
+        const rndQueryId = BigInt(getRandomInt(1000, 2000));
 
         let dataBefore = await getContractData(orderContract.address);
 
         // Testing not valid signer address, but valid signer index
-        let res = await orderContract.sendApprove(blockchain.sender(notSigner), signerIdx);
-        expect(res.transactions).toHaveTransaction({
-            from: notSigner,
-            to: orderContract.address,
-            op: Op.order.approve,
-            aborted: true,
-            success: false,
-            exitCode: Errors.order.unauthorized_sign
-        });
+        let res = await orderContract.sendApprove(blockchain.sender(notSigner), signerIdx, msgVal, rndQueryId);
+
+        testApprove(res.transactions, notSigner, orderContract.address, Errors.order.unauthorized_sign);
 
         expect(await getContractData(orderContract.address)).toEqualCell(dataBefore);
 
@@ -348,33 +422,22 @@ describe('Order', () => {
 
         signerIdx = (signerIdx + 1) % signers.length;
 
-        res = await orderContract.sendApprove(rndSigner.getSender(), signerIdx);
+        res = await orderContract.sendApprove(rndSigner.getSender(), signerIdx, msgVal, rndQueryId);
 
-        expect(res.transactions).toHaveTransaction({
-            from: rndSigner.address,
-            to: orderContract.address,
-            op: Op.order.approve,
-            aborted: true,
-            success: false,
-            exitCode: Errors.order.unauthorized_sign
-        });
-
+        testApprove(res.transactions, rndSigner.address, orderContract.address, Errors.order.unauthorized_sign);
         expect(await getContractData(orderContract.address)).toEqualCell(dataBefore);
     });
     it('should reject approval if already approved', async () => {
         const signersNum = signers.length;
+        const msgVal     = toNano('0.1');
+        const queryId    = BigInt(getRandomInt(1000, 2000));
         // Pick random starting point
         let   signerIdx  = getRandomInt(0, signersNum - 1);
         for (let i = 0; i < 3; i++) {
             let signer     = signers[signerIdx];
             let dataBefore = await orderContract.getOrderData();
-            let res = await orderContract.sendApprove(signer.getSender(), signerIdx);
-            expect(res.transactions).toHaveTransaction({
-                from: signer.address,
-                to: orderContract.address,
-                op: Op.order.approve,
-                success: true
-            });
+            let res = await orderContract.sendApprove(signer.getSender(), signerIdx, msgVal, queryId);
+            testApprove(res.transactions, signer.address, orderContract.address, 0);
             let dataAfter  = await orderContract.getOrderData();
 
             expect(dataAfter.inited).toBe(true);
@@ -385,14 +448,9 @@ describe('Order', () => {
             dataBefore = dataAfter;
 
             // Repeat
-            res = await orderContract.sendApprove(signer.getSender(), signerIdx);
-            expect(res.transactions).toHaveTransaction({
-                from: signer.address,
-                to: orderContract.address,
-                op: Op.order.approve,
-                success: false,
-                aborted: true
-            })
+            res = await orderContract.sendApprove(signer.getSender(), signerIdx, msgVal, queryId);
+
+            testApprove(res.transactions, signer.address, orderContract.address, Errors.order.already_approved);
 
             dataAfter  = await orderContract.getOrderData();
 
@@ -408,13 +466,11 @@ describe('Order', () => {
     });
 
     it('should reject execution when expired', async () => {
+        const msgVal     = toNano('0.1');
+        const queryId    = BigInt(getRandomInt(1000, 2000));
         for (let i = 0; i < threshold - 1; i++) {
-            const res = await orderContract.sendApprove(signers[i].getSender(), i);
-            expect(res.transactions).toHaveTransaction({
-                from: signers[i].address,
-                to: orderContract.address,
-                success: true
-            });
+            const res = await orderContract.sendApprove(signers[i].getSender(), i, msgVal, queryId);
+            testApprove(res.transactions, signers[i].address, orderContract.address, 0);
         }
 
         let dataAfter = await orderContract.getOrderData();
@@ -430,32 +486,9 @@ describe('Order', () => {
         const lastSigner = signers[signerIdx];
         const msgValue   = toNano('1');
         const balanceBefore = (await blockchain.getContract(orderContract.address)).balance;
-        const res = await orderContract.sendApprove(lastSigner.getSender(), signerIdx, msgValue);
+        const res = await orderContract.sendApprove(lastSigner.getSender(), signerIdx, msgValue, queryId);
 
-        let approveTx = findTransactionRequired(res.transactions, {
-            from: lastSigner.address,
-            on: orderContract.address,
-            op: Op.order.approve,
-            success: true,
-            outMessagesCount: 2
-        });
-
-        // Excess message
-        expect(res.transactions).toHaveTransaction({
-            from: orderContract.address,
-            on: lastSigner.address,
-            op: Op.order.expired,
-            value: msgValue - prices.lumpPrice - computedGeneric(approveTx).gasFees,
-            success: true,
-        });
-        // Return balance leftovers
-        expect(res.transactions).toHaveTransaction({
-            from: orderContract.address,
-            on: multisig.address,
-            op: Op.order.expired,
-            value: balanceBefore - prices.lumpPrice - storageCollected(approveTx),
-            success: true
-        });
+        testApprove(res.transactions, lastSigner.address, orderContract.address, Errors.order.expired);
         expect(res.transactions).not.toHaveTransaction({
             from: orderContract.address,
             to: multisig.address,
@@ -471,11 +504,7 @@ describe('Order', () => {
         const msgVal = toNano('1');
         for (let i = 0; i < threshold; i++) {
             const res = await orderContract.sendApprove(signers[i].getSender(), i, msgVal);
-            expect(res.transactions).toHaveTransaction({
-                from: signers[i].address,
-                to: orderContract.address,
-                success: true
-            });
+            testApprove(res.transactions, signers[i].address, orderContract.address, 0);
             // Meh! TS made me do dat!
             if(i == threshold - 1) {
                 expect(res.transactions).toHaveTransaction({
@@ -494,21 +523,8 @@ describe('Order', () => {
 
         const res = await orderContract.sendApprove(lateSigner.getSender(), threshold, msgVal);
 
-        const approveTx = findTransactionRequired(res.transactions, {
-                from: lateSigner.address,
-                on: orderContract.address,
-                op: Op.order.approve,
-                success: true,
-                outMessagesCount: 1
-        });
-        // Return excess
-        expect(res.transactions).toHaveTransaction({
-            from: orderContract.address,
-            on: lateSigner.address,
-            op: Op.order.already_executed,
-            value: msgVal - prices.lumpPrice - computedGeneric(approveTx).gasFees,
-            success: true
-        });
+        testApprove(res.transactions, lateSigner.address, orderContract.address, Errors.order.already_executed);
+
         // No execution message
         expect(res.transactions).not.toHaveTransaction({
             from: orderContract.address,
@@ -537,12 +553,7 @@ describe('Order', () => {
 
         for (let i = 0; i < jumboSigners.length; i++) {
             res = await jumboOrder.sendApprove(jumboSigners[i].getSender(), i);
-            expect(res.transactions).toHaveTransaction({
-                from: jumboSigners[i].address,
-                to: jumboOrder.address,
-                op: Op.order.approve,
-                success: true
-            });
+            testApprove(res.transactions, jumboSigners[i].address, jumboOrder.address, 0);
 
             const dataAfter = await jumboOrder.getOrderData();
             expect(dataAfter.approvals_num).toEqual(i + 1);
