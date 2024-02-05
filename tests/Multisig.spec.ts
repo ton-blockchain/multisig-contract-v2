@@ -15,6 +15,7 @@ describe('Multisig', () => {
     let multisig: SandboxContract<Multisig>;
     let deployer : SandboxContract<TreasuryContract>;
     let proposer : SandboxContract<TreasuryContract>;
+    let signers  : Address[];
     let testMsg : TransferRequest;
     let testAddr : Address;
     let initialState: BlockchainSnapshot;
@@ -26,10 +27,11 @@ describe('Multisig', () => {
         blockchain = await Blockchain.create();
         deployer = await blockchain.treasury('deployer');
         proposer = await blockchain.treasury('proposer');
+        signers  = [deployer, ...await blockchain.createWallets(4)].map(s => s.address);
 
         let config = {
             threshold: 1,
-            signers: [deployer.address],
+            signers,
             proposers: [proposer.address],
             allowArbitrarySeqno: false,
         };
@@ -458,11 +460,11 @@ describe('Multisig', () => {
         expect(order2Tx!.lt).toBeLessThan(order1Tx!.lt);
     });
     it('should execute update multisig parameters correctly', async () => {
-        const newSigner = await blockchain.treasury('new_signer');
+        const newSigners = await blockchain.createWallets(4);
         const updOrder : UpdateRequest = {
             type: "update",
             threshold: 4,
-            signers: [newSigner.address],
+            signers: newSigners.map(s => s.address),
             proposers: []
         };
         let initialSeqno = (await multisig.getMultisigData()).nextOrderSeqno;
@@ -485,7 +487,7 @@ describe('Multisig', () => {
 
         const dataAfter = await multisig.getMultisigData();
         expect(dataAfter.threshold).toEqual(BigInt(updOrder.threshold));
-        expect(dataAfter.signers[0]).toEqualAddress(newSigner.address);
+        expect(dataAfter.signers[0]).toEqualAddress(newSigners[0].address);
         expect(dataAfter.proposers.length).toBe(0);
     });
     it('should reject multisig parameters with inconsistently ordered signers or proposers', async () => {
@@ -720,7 +722,7 @@ describe('Multisig', () => {
         const updOrder : UpdateRequest = {
             type: "update",
             threshold: Number(dataBefore.threshold) + 1, // threshold increases
-            signers: [deployer.address], // Doesn't change
+            signers, // Doesn't change
             proposers: dataBefore.proposers
         };
         // First we deploy order with proposer, so it doesn't execute right away
