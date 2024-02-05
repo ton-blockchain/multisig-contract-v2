@@ -152,14 +152,14 @@ cell order) impure inline {
             ;; order is inited second time, if it is inited by another oracle
             ;; we count it as approval
             op = op::approve;
-            ;; skip unused fields and leave only init_signer_index in in_msg_body
             in_msg_body~load_index();
             in_msg_body~load_nonempty_dict();
             in_msg_body~load_timestamp();
             in_msg_body~skip_ref();
             int approve_on_init? = in_msg_body~load_bool();
             throw_unless(error::already_inited, approve_on_init?);
-            ;; now next branch (op == op::approve) is ready to process vote
+            signer_index = in_msg_body~load_index();
+            (sender_address, _) = signers.udict_get?(INDEX_SIZE, signer_index);
         }
     }
     if (op == op::approve) {
