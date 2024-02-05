@@ -192,7 +192,7 @@ cell order) impure inline {
             );
         }
     } else {
-        throw(error::unknown_op);
+        throw_unless(error::unknown_op, op == op::init);
     }
 
     ;; Order can be approved through approve and also through init (if threshold == 1)
