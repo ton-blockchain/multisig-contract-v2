@@ -4,7 +4,7 @@
 #include "messages.func";
 #include "errors.func";
 
-((int, int), ()) ~add_approval((int, int) approve_data, int signer_index) impure {
+((int, int), ()) ~add_approval((int, int) approve_data, int signer_index) impure inline {
     (int approvals_mask, int approvals_num) = approve_data;
     int mask = 1 << signer_index;
     throw_if(error::already_approved, approvals_mask & mask);
@@ -13,7 +13,7 @@
     return ((approvals_mask, approvals_num), ());
 }
 
-(slice, int, int, int, cell, int, int, int, cell) load_data() {
+(slice, int, int, int, cell, int, int, int, cell) load_data() inline {
     slice ds = get_data().begin_parse();
     (slice multisig_address, int order_seqno) = (ds~load_msg_addr(), ds~load_order_seqno());
 

@@ -9,7 +9,7 @@ cell pack_order_init_data(slice multisig_address, int order_seqno) inline {
     .end_cell();
 }
 
-cell calculate_order_state_init(slice multisig_address, int order_seqno) {
+cell calculate_order_state_init(slice multisig_address, int order_seqno) inline {
     {-
     https://github.com/ton-blockchain/ton/blob/8a9ff339927b22b72819c5125428b70c406da631/crypto/block/block.tlb#L144
     _ split_depth:(Maybe (## 5)) special:(Maybe TickTock)
@@ -49,7 +49,7 @@ const int ORDER_STATE_CELL_OVERHEAD = 21;
 const int EXECUTE_ORDER_BIT_OVERHEAD = 440;
 const int EXECUTE_ORDER_CELL_OVERHEAD = 1;
 
-int calculate_order_processing_cost(cell order_body, cell signers, int duration) {
+int calculate_order_processing_cost(cell order_body, cell signers, int duration) inline {
     {- There are following costs:
        1) Gas cost on Multisig contract
        2) Forward cost for Multisig->Order message
