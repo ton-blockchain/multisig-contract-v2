@@ -5,7 +5,7 @@
 #include "messages.func";
 #include "order_helpers.func";
 
-int validate_dictionary_sequence(cell dict) impure {
+int validate_dictionary_sequence(cell dict) impure inline {
     int index = -1;
     int expected_index = 0;
     do {
@@ -18,7 +18,7 @@ int validate_dictionary_sequence(cell dict) impure {
     return expected_index;
 }
 
-((int, cell, int, cell), ()) ~execute_order((int, cell, int, cell) storage, cell order_body) impure {
+((int, cell, int, cell), ()) ~execute_order((int, cell, int, cell) storage, cell order_body) impure inline {
 
     accept_message();
 
@@ -53,7 +53,7 @@ int validate_dictionary_sequence(cell dict) impure {
 }
 
 
-(int, int, cell, int, cell, int) load_data() {
+(int, int, cell, int, cell, int) load_data() inline {
     slice ds = get_data().begin_parse();
     var data = (
         ds~load_order_seqno(), ;; next_order_seqno
