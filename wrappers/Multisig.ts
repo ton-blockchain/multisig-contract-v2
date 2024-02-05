@@ -201,7 +201,7 @@ export class Multisig implements Contract {
     }
     async sendNewOrder(provider: ContractProvider, via: Sender,
            actions: Order | Cell,
-           expirationDate: number, value: bigint = 200000000n, addrIdx?: number, isSigner?: boolean) {
+           expirationDate: number, value: bigint = toNano('1'), addrIdx?: number, isSigner?: boolean) {
 
         if(this.configuration === undefined) {
             throw new Error("Configuration is not set: use createFromConfig or loadConfiguration");
