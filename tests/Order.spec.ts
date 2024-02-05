@@ -243,7 +243,7 @@ describe('Order', () => {
         expect(dataAfter.inited).toBe(true);
         expect(dataAfter.threshold).toEqual(threshold);
     });
-    it('order contract should accept init message only once', async () => {
+    it('order contract should accept init message only once if approve_on_init = false', async () => {
         const expDate = blockchain.now! + 1000;
         const newSigners = await blockchain.createWallets(10);
         const dataBefore = await getContractData(orderContract.address);
@@ -260,6 +260,80 @@ describe('Order', () => {
 
         // To be extra sure that there is no commit()
         expect(dataBefore).toEqualCell(await getContractData(orderContract.address));
+    });
+    it('order contract should treat multiple init messages as votes if approve_on_init = true', async () => {
+        const expDate = blockchain.now! + getRandomInt(1000, 2000);
+        const newSigners = await blockchain.createWallets(10);
+        const approveOnInit = true;
+        const initialData   = await orderContract.getOrderData();
+        for(let i = 0; i < threshold; i++) {
+            const dataBefore = await orderContract.getOrderData();
+            const res = await orderContract.sendDeploy(multisig.getSender(), toNano('1'), newSigners.map(s => s.address), expDate, mockOrder, threshold, approveOnInit, i);
+
+            expect(res.transactions).toHaveTransaction({
+                on: orderContract.address,
+                from: multisig.address,
+                op: Op.order.init,
+                success: true
+            });
+            const dataAfter = await orderContract.getOrderData();
+
+            expect(dataAfter.approvals_num).toEqual(i + 1);
+            expect(dataAfter.approvals[i]).toBe(true);
+            if(dataBefore.approvals === null) {
+                expect(dataAfter._approvals).not.toBe(null);
+            }
+            else {
+                expect(dataAfter._approvals).toBeGreaterThan(dataBefore._approvals!);
+            }
+
+            const stringifyAddr = (a: Address) => a.toString();
+            // Make sure signers and exp data didn't change
+            expect(dataAfter.signers.map(stringifyAddr)).toEqual(initialData.signers.map(stringifyAddr));
+            expect(dataAfter.expiration_date).toEqual(initialData.expiration_date);
+
+            if(i + 1 == threshold) {
+                expect(res.transactions).toHaveTransaction({
+                    on: multisig.address,
+                    from: orderContract.address,
+                    op: Op.multisig.execute
+                });
+            }
+        }
+    })
+    it('should not be possible to use multiple init msg to approve multiple idx twice', async () => {
+        const expDate = blockchain.now! + getRandomInt(1000, 2000);
+        const signerIdx = getRandomInt(0, signers.length - 1);
+
+        const approveOnInit = true;
+
+        let   res = await orderContract.sendDeploy(multisig.getSender(), toNano('1'), signers.map(s => s.address), expDate, mockOrder, threshold, approveOnInit, signerIdx);
+
+        expect(res.transactions).toHaveTransaction({
+            on: orderContract.address,
+            from: multisig.address,
+            op: Op.order.init,
+            success: true
+        });
+
+        let dataInit = await orderContract.getOrderData();
+        expect(dataInit.approvals_num).toEqual(1);
+        expect(dataInit.approvals[signerIdx]).toBe(true);
+
+        let dataBefore = await getContractData(orderContract.address);
+        // Repeat init
+        res = await orderContract.sendDeploy(multisig.getSender(), toNano('1'), signers.map(s => s.address), expDate, mockOrder, threshold, approveOnInit, signerIdx);
+
+        expect(res.transactions).toHaveTransaction({
+            from: orderContract.address,
+            // to: signers[signerIdx].address ?
+            body: (x) => testApproveResponse(x!, {
+                status: Op.order.approve_rejected,
+                exit_code: Errors.order.already_approved
+            })
+        });
+
+        expect(await getContractData(orderContract.address)).toEqualCell(dataBefore);
     });
 
     it('should approve order', async () => {
