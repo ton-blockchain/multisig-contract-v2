@@ -25,6 +25,13 @@ describe('Multisig', () => {
     beforeAll(async () => {
         code = await compile('Multisig');
         blockchain = await Blockchain.create();
+
+        const _libs = Dictionary.empty(Dictionary.Keys.BigUint(256), Dictionary.Values.Cell());
+        let order_code_raw = await compile('Order');
+        _libs.set(BigInt(`0x${order_code_raw.hash().toString('hex')}`), order_code_raw);
+        const libs = beginCell().storeDictDirect(_libs).endCell();
+        blockchain.libs = libs;
+
         deployer = await blockchain.treasury('deployer');
         proposer = await blockchain.treasury('proposer');
         signers  = [deployer, ...await blockchain.createWallets(4)].map(s => s.address);

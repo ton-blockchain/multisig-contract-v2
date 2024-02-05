@@ -230,6 +230,12 @@ describe('FeeComputation', () => {
 
     beforeEach(async () => {
         blockchain = await Blockchain.create();
+
+        const _libs = Dictionary.empty(Dictionary.Keys.BigUint(256), Dictionary.Values.Cell());
+        _libs.set(BigInt(`0x${(await compile('Order')).hash().toString('hex')}`), code_raw);
+        const libs = beginCell().storeDictDirect(_libs).endCell();
+        blockchain.libs = libs;
+
         deployer = await blockchain.treasury('deployer');
         second = await blockchain.treasury('second');
         proposer = await blockchain.treasury('proposer');

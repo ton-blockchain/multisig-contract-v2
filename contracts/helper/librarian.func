@@ -1,0 +1,34 @@
+;; Simple library keeper
+
+#include "../imports/stdlib.fc";
+#include "../messages.func";
+
+const int DEFAULT_DURATION = 3600 * 24 * 365 * 100;
+const int ONE_TON = 1000000000;
+
+cell empty_cell() asm "<b b> PUSHREF";
+
+() set_lib_code(cell code, int mode) impure asm "SETLIBCODE";
+
+
+() recv_internal(int msg_value, cell in_msg_full, slice in_msg_body) impure {
+    slice cs = in_msg_full.begin_parse();
+    int flags = cs~load_uint(4);
+    slice sender = cs~load_msg_addr();
+
+
+    cell lib_to_publish = get_data();
+
+    int initial_gas = gas_consumed();
+    (int order_cells, int order_bits, _) = compute_data_size(lib_to_publish, 2048);
+    int size_counting_gas = gas_consumed() - initial_gas;
+
+    int to_reserve = get_simple_compute_fee(MASTERCHAIN, size_counting_gas) +
+                     get_storage_fee(MASTERCHAIN, DEFAULT_DURATION, order_bits, order_cells);
+    raw_reserve(to_reserve, RESERVE_BOUNCE_ON_ACTION_FAIL);
+    send_message_with_only_body(sender, 0, begin_cell(), NON_BOUNCEABLE, SEND_MODE_CARRY_ALL_BALANCE);
+    set_lib_code(lib_to_publish, 2);
+    ;; brick contract
+    set_code(null());
+    set_data(null());
+}

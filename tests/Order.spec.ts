@@ -1,4 +1,4 @@
-import { Address, beginCell, Cell, internal as internal_relaxed, toNano, Transaction } from '@ton/core';
+import { Address, beginCell, Cell, internal as internal_relaxed, toNano, Transaction, Dictionary } from '@ton/core';
 import { Order, OrderConfig } from '../wrappers/Order';
 import { Op, Errors, Params } from "../wrappers/Constants";
 import '@ton/test-utils';
@@ -33,8 +33,17 @@ describe('Order', () => {
                       exp: number, query_id?: number | bigint) => void;
 
     beforeAll(async () => {
-        code =await compile('Order');
+        let code_raw = await compile('Order');
         blockchain = await Blockchain.create();
+
+        const _libs = Dictionary.empty(Dictionary.Keys.BigUint(256), Dictionary.Values.Cell());
+        _libs.set(BigInt(`0x${code_raw.hash().toString('hex')}`), code_raw);
+        const libs = beginCell().storeDictDirect(_libs).endCell();
+        blockchain.libs = libs;
+        let lib_prep = beginCell().storeUint(2,8).storeBuffer(code_raw.hash()).endCell();
+        code = new Cell({ exotic:true, bits: lib_prep.bits, refs:lib_prep.refs});
+
+
         multisig = await blockchain.treasury('multisig');
         notSigner = await blockchain.treasury('notSigner');
         const testAddr = randomAddress();
