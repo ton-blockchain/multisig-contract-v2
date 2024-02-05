@@ -156,7 +156,7 @@ cell order) impure inline {
             in_msg_body~load_index();
             in_msg_body~load_nonempty_dict();
             in_msg_body~load_timestamp();
-            in_msg_body~skip_ref();
+            in_msg_body~load_ref();
             int approve_on_init? = in_msg_body~load_bool();
             throw_unless(error::already_inited, approve_on_init?);
             ;; now next branch (op == op::approve) is ready to process vote
