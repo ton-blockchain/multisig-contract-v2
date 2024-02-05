@@ -877,3 +877,6 @@ const int RESERVE_REGULAR = 0;
 const int RESERVE_AT_MOST = 2;
 ;;; in the case of action fail - bounce transaction. No effect if RESERVE_AT_MOST (+2) is used. TVM UPGRADE 2023-07. https://docs.ton.org/learn/tvm-instructions/tvm-upgrade-2023-07#sending-messages
 const int RESERVE_BOUNCE_ON_ACTION_FAIL = 16;
+
+
+(slice, ()) ~skip_ref(slice s) asm "LDREF NIP";
