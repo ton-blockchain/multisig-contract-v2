@@ -73,11 +73,11 @@ int calculate_order_processing_cost(cell order_body, cell signers, int duration)
     get_compute_fee(BASECHAIN, MULTISIG_EXECUTE_GAS);
 
     int forward_fees = get_forward_fee(BASECHAIN,
-                                       INIT_ORDER_CELL_OVERHEAD + order_cells + signers_bits,
-                                       INIT_ORDER_BIT_OVERHEAD + order_bits + signers_cells) +
+                                       INIT_ORDER_BIT_OVERHEAD + order_bits + signers_bits,
+                                       INIT_ORDER_CELL_OVERHEAD + order_cells + signers_cells) +
                        get_forward_fee(BASECHAIN,
-                                       EXECUTE_ORDER_CELL_OVERHEAD + order_cells,
-                                       EXECUTE_ORDER_BIT_OVERHEAD + order_bits);
+                                       EXECUTE_ORDER_BIT_OVERHEAD + order_bits,
+                                       EXECUTE_ORDER_CELL_OVERHEAD + order_cells);
 
 
     int storage_fees = get_storage_fee(BASECHAIN, duration,
