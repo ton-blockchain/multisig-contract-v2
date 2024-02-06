@@ -7,6 +7,7 @@ import { compile } from '@ton/blueprint';
 import { randomAddress, findTransactionRequired, findTransaction} from '@ton/test-utils';
 import { Op, Errors, Params } from '../wrappers/Constants';
 import { getRandomInt, differentAddress, Txiterator, executeTill, executeFrom} from './utils';
+import { getMsgPrices, computedGeneric } from '../gasUtils';
 
 describe('Multisig', () => {
     let code: Cell;
@@ -882,5 +883,161 @@ describe('Multisig', () => {
             expect(tx.lt).toBeGreaterThan(prevLt); // Check tx order
             prevLt = tx.lt;
         }
+    });
+    describe('Arbitrary seqno', () => {
+        describe('Not allowed', () => {
+        it('should not allow to create order with seqno other then next order seqno', async () => {
+            const multisigData = await multisig.getMultisigData();
+            // Arbitrary seqno is not allowed
+            expect(multisigData.nextOrderSeqno).not.toEqual(-1n);
+
+
+            const orderAddress = await multisig.getOrderAddress(multisigData.nextOrderSeqno);
+            let    res = await multisig.sendNewOrder(deployer.getSender(),[testMsg],
+                                                    curTime() + 100, toNano('0.5'),
+                                                    0, true, multisigData.nextOrderSeqno);
+            expect(res.transactions).toHaveTransaction({
+                on: multisig.address,
+                from: deployer.address,
+                op: Op.multisig.new_order,
+                success: true,
+            });
+            expect(res.transactions).toHaveTransaction({
+                on: orderAddress,
+                from: multisig.address,
+            });
+            const dataAfter = await multisig.getMultisigData();
+            const trySeqno = async (seqno: bigint) => {
+                res = await multisig.sendNewOrder(deployer.getSender(),[testMsg],
+                                                  curTime() + 100, toNano('0.5'),
+                                                  0, true, seqno);
+                expect(res.transactions).toHaveTransaction({
+                    on: multisig.address,
+                    from: deployer.address,
+                    op: Op.multisig.new_order,
+                    success: false,
+                    aborted: true,
+                    exitCode: Errors.multisig.invalid_new_order
+                });
+                expect(res.transactions).not.toHaveTransaction({
+                    on: orderAddress
+                });
+                // Should not change
+                expect((await multisig.getMultisigData()).nextOrderSeqno).toEqual(dataAfter.nextOrderSeqno);
+            };
+            // Now repeat with same seqno
+            await trySeqno(multisigData.nextOrderSeqno);
+            // Now with seqno higher than expected
+            await trySeqno(multisigData.nextOrderSeqno + BigInt(getRandomInt(2, 1000)));
+            // Now with seqno lower than expected
+            await trySeqno(dataAfter.nextOrderSeqno - 1n);
+        });
+        });
+        describe('Allowed', () => {
+            let newMultisig: SandboxContract<Multisig>;
+            let allowedState: BlockchainSnapshot;
+            beforeAll(async () => {
+                blockchain.now = Math.floor(Date.now() / 1000);
+                let config = {
+                    threshold: 4,
+                    signers: signers,
+                    proposers: [proposer.address],
+                    allowArbitrarySeqno: true,
+                };
+                newMultisig = blockchain.openContract(Multisig.createFromConfig(config, code));
+                const deployResult = await newMultisig.sendDeploy(deployer.getSender(), toNano('1'));
+
+                expect(deployResult.transactions).toHaveTransaction({
+                    from: deployer.address,
+                    to: newMultisig.address,
+                    deploy: true,
+                    success: true,
+                });
+                expect((await newMultisig.getMultisigData()).nextOrderSeqno).toEqual(-1n);
+                allowedState = blockchain.snapshot();
+            });
+            beforeEach( async () => await blockchain.loadFrom(allowedState));
+            it('should allow to create orders with arbitrary seqno', async () => {
+                for(let i = 0; i < 5; i++) {
+                    const newSeqno  = BigInt(getRandomInt(100, 20000));
+                    const signerIdx = i % signers.length;
+                    const orderAddr = await newMultisig.getOrderAddress(newSeqno);
+                    let res = await newMultisig.sendNewOrder(blockchain.sender(signers[signerIdx]),
+                                                          [testMsg], curTime() + 100,
+                                                          toNano('0.5'), signerIdx,
+                                                          true, newSeqno);
+                    expect(res.transactions).toHaveTransaction({
+                        on: newMultisig.address,
+                        from: signers[signerIdx],
+                        op: Op.multisig.new_order,
+                        success: true
+                    });
+                    expect(res.transactions).toHaveTransaction({
+                        on: orderAddr,
+                        from: newMultisig.address,
+                    });
+                }
+            });
+            it('subsequent order creation with same seqno should result in vote', async () => {
+                const rndSeqno  = BigInt(getRandomInt(100, 20000));
+                const orderContract = blockchain.openContract(Order.createFromAddress(
+                    await newMultisig.getOrderAddress(rndSeqno)
+                ));
+                const msgPrices = getMsgPrices(blockchain.config, 0);
+                const idxMap = Array.from(signers.keys());
+                const approveOnInit = true;
+                let idxCount = idxMap.length - 1;
+                for(let i = 0; i < newMultisig.configuration!.threshold; i++) {
+                    let signerIdx = idxMap.splice(getRandomInt(0, idxCount), 1)[0];
+                    const signer  = signers[signerIdx];
+                    idxCount--;
+                    let res = await newMultisig.sendNewOrder(blockchain.sender(signer),
+                                                          [testMsg], curTime() + 1000,
+                                                          toNano('0.5'), signerIdx,
+                                                          approveOnInit, rndSeqno);
+                    expect(res.transactions).toHaveTransaction({
+                        on: newMultisig.address,
+                        from: signer,
+                        op: Op.multisig.new_order,
+                        success: true
+                    });
+
+                    const initTx = findTransactionRequired(res.transactions,{
+                        on: orderContract.address,
+                        from: newMultisig.address,
+                        op: Op.order.init,
+                        success: true
+                    });
+                    const inMsg = initTx.inMessage!;
+                    if(inMsg.info.type !== "internal"){
+                        throw new Error("No way");
+                    }
+
+                    const dataAfter = await orderContract.getOrderData();
+                    expect(dataAfter.approvals_num).toEqual(i + 1);
+                    expect(dataAfter.approvals[signerIdx]).toBe(true);
+
+                    if(i > 0) {
+                        const inValue = inMsg.info.value.coins;
+                        expect(res.transactions).toHaveTransaction({
+                            from: orderContract.address,
+                            to: signer,
+                            op: Op.order.approved,
+                            success: true,
+                            // Should return change
+                            value: inValue - msgPrices.lumpPrice - computedGeneric(initTx).gasFees
+                        });
+                    }
+                    if(i + 1 == newMultisig.configuration!.threshold) {
+                        expect(res.transactions).toHaveTransaction({
+                            from: orderContract.address,
+                            to: newMultisig.address,
+                            op: Op.multisig.execute
+                        });
+                    }
+
+                }
+            });
+        });
     });
 });

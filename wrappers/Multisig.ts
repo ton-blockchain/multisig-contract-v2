@@ -201,8 +201,11 @@ export class Multisig implements Contract {
     }
     async sendNewOrder(provider: ContractProvider, via: Sender,
            actions: Order | Cell,
-           expirationDate: number, value: bigint = toNano('1'), addrIdx?: number, isSigner?: boolean) {
+           expirationDate: number, value: bigint = toNano('1'), addrIdx?: number, isSigner?: boolean, seqno?: bigint) {
 
+        if(seqno == undefined) {
+            seqno = 115792089237316195423570985008687907853269984665640564039457584007913129639935n;
+        }
         if(this.configuration === undefined) {
             throw new Error("Configuration is not set: use createFromConfig or loadConfiguration");
         }
@@ -239,7 +242,7 @@ export class Multisig implements Contract {
         await provider.internal(via, {
             sendMode: SendMode.PAY_GAS_SEPARATELY,
             value,
-            body: Multisig.newOrderMessage(newActions, expirationDate, isSigner, addrIdx)
+            body: Multisig.newOrderMessage(newActions, expirationDate, isSigner, addrIdx, seqno)
         });
         //console.log(await provider.get("get_order_address", []));
     }

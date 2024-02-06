@@ -20,6 +20,7 @@ export abstract class Op {
 export abstract class Errors {
     static readonly multisig = {
         unauthorized_new_order : 1007,
+        invalid_new_order : 1008,
         not_enough_ton : 100,
         unauthorized_execute : 101,
         singers_outdated : 102,
