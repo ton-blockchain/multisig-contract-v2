@@ -94,7 +94,6 @@ cell order) impure inline {
 
     if (op == 0) {
         ;; message with text comment
-        ;; todo: some wallets send text body in ref
         if(in_msg_body.slice_refs()) { ;;combine comment into one slice
             builder combined_string = begin_cell();
             do {
