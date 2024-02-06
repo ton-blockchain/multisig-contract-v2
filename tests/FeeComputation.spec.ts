@@ -7,6 +7,7 @@ import '@ton/test-utils';
 import { compile } from '@ton/blueprint';
 import { randomAddress } from '@ton/test-utils';
 import { MsgPrices, getMsgPrices, collectCellStats, computeFwdFees, computeMessageForwardFees, shr16ceil } from '../gasUtils';
+import { getRandomInt } from './utils';
 
 export const computedGeneric = (trans:Transaction) => {
     if(trans.description.type !== "generic")
@@ -37,6 +38,7 @@ describe('FeeComputation', () => {
 
     let blockchain: Blockchain;
     let multisigWallet: SandboxContract<Multisig>;
+    let multisigJumbo: SandboxContract<Multisig>; // With 255 signers
     let deployer : SandboxContract<TreasuryContract>;
     let second : SandboxContract<TreasuryContract>;
     let proposer : SandboxContract<TreasuryContract>;
@@ -62,12 +64,21 @@ describe('FeeComputation', () => {
 
         let config = {
             threshold: 2,
-            signers: signers.map(s => s.address), // [deployer.address, second.address],
+            signers: [deployer.address, second.address],
             proposers: [proposer.address],
             allowArbitrarySeqno: false,
         };
+        let jumboConfig = {
+            threshold: 2,
+            signers: signers.map(s => s.address),
+            proposers: [proposer.address],
+            allowArbitrarySeqno: false,
+        }
 
         multisigWallet = blockchain.openContract(Multisig.createFromConfig(config, multisig_code));
+        multisigJumbo  = blockchain.openContract(Multisig.createFromConfig(jumboConfig, multisig_code));
+
+        await multisigJumbo.sendDeploy(deployer.getSender(), toNano('100'));
         msgPrices        = getMsgPrices(blockchain.config, 0);
 
         const deployResult = await multisigWallet.sendDeploy(deployer.getSender(), toNano('1'));
@@ -194,6 +205,24 @@ describe('FeeComputation', () => {
         const orderList:Array<Action> = [testMsg,/*testMsg, testMsg, testMsg2*/];
         let timeSpan  = 365 * 24 * 3600;
         await testOrderEstimate(multisigWallet, orderList, timeSpan);
+    });
+    it('should estimate correctly with 255 signers multisig', async () => {
+        const testAddr = randomAddress();
+        const testMsg: TransferRequest = {type:"transfer", sendMode: 1, message: internal({to: testAddr, value: toNano('0.015'), body: beginCell().storeUint(12345, 32).endCell()})};
+        const orderList:Array<Action> = [testMsg,/*testMsg, testMsg, testMsg2*/];
+        let timeSpan  = 365 * 24 * 3600;
+        await testOrderEstimate(multisigJumbo, orderList, timeSpan);
+    });
+    it('should estimate correctly with large order', async () => {
+        const orderList:Array<Action> = [];
+        let timeSpan  = 365 * 24 * 3600;
+
+        for(let i = 0; i < 100; i++ ) {
+            const testAddr = randomAddress();
+            const testMsg: TransferRequest = {type:"transfer", sendMode: 1, message: internal({to: testAddr, value: toNano('0.015'), body: beginCell().storeUint(getRandomInt(10000, 20000), 32).endCell()})};
+            orderList.push(testMsg);
+        }
+        await testOrderEstimate(multisigJumbo, orderList, timeSpan);
     });
 
     it('common cases gas fees multisig', async () => {
