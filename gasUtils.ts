@@ -79,7 +79,7 @@ export function storageGeneric<T extends Transaction>(transaction: T) {
     return storagePhase;
 }
 
-function shr16ceil(src: bigint) {
+export function shr16ceil(src: bigint) {
     let rem = src % BigInt(65536);
     let res = src / 65536n; // >> BigInt(16);
     if (rem != BigInt(0)) {
