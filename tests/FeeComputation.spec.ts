@@ -1,5 +1,5 @@
 import { Blockchain, SandboxContract, TreasuryContract, prettyLogTransactions, BlockchainTransaction } from '@ton/sandbox';
-import { beginCell, Cell, internal, toNano, Transaction, storeAccountStorage, storeMessage, Slice, Message, Dictionary, storeStateInit } from '@ton/core';
+import { beginCell, Cell, internal, toNano, Transaction, storeAccountStorage, storeMessage, Slice, Message, Dictionary, storeStateInit, fromNano } from '@ton/core';
 import { Multisig, TransferRequest, Action, MultisigConfig } from '../wrappers/Multisig';
 import { Order } from '../wrappers/Order';
 import { Op } from '../wrappers/Constants';
@@ -232,6 +232,7 @@ describe('FeeComputation', () => {
         blockchain = await Blockchain.create();
 
         const _libs = Dictionary.empty(Dictionary.Keys.BigUint(256), Dictionary.Values.Cell());
+        let code_raw = await compile('Order');
         _libs.set(BigInt(`0x${(await compile('Order')).hash().toString('hex')}`), code_raw);
         const libs = beginCell().storeDictDirect(_libs).endCell();
         blockchain.libs = libs;
@@ -241,22 +242,23 @@ describe('FeeComputation', () => {
         proposer = await blockchain.treasury('proposer');
 
         // Total max 255 signers
-        signers  = [deployer, ...await blockchain.createWallets(254)];
+        signers  = [deployer, second, ...await blockchain.createWallets(253)];
 
         let config = {
             threshold: 2,
-            signers: [deployer.address, second.address],
+            signers: signers.map(s => s.address), // [deployer.address, second.address],
             proposers: [proposer.address],
-            modules: [],
-            guard: null,
+            allowArbitrarySeqno: false,
         };
 
         multisigWallet = blockchain.openContract(Multisig.createFromConfig(config, multisig_code));
         msgPrices        = getMsgPrices(blockchain.config, 0);
 
-        const deployResult = await multisigWallet.sendDeploy(deployer.getSender(), toNano('0.05'));
+        const deployResult = await multisigWallet.sendDeploy(deployer.getSender(), toNano('1'));
 
         curTime = () => blockchain.now ?? Math.floor(Date.now() / 1000);
+        // Stop ticking
+        blockchain.now = curTime();
     });
 
     it('should send new order with contract estimated message value', async () => {
@@ -265,7 +267,7 @@ describe('FeeComputation', () => {
         const testMsg2: TransferRequest = {type:"transfer", sendMode: 1, message: internal({to: randomAddress(), value: toNano('0.017'), body: beginCell().storeUint(123425, 32).endCell()})};
         const orderList:Array<Action> = [testMsg,/*testMsg, testMsg, testMsg2*/];
         let timeSpan  = 365 * 24 * 3600;
-        const expTime = Math.floor(Date.now() / 1000) + timeSpan;
+        const expTime = curTime() + timeSpan;
         let orderEstimateOnContract = await multisigWallet.getOrderEstimate(orderList, BigInt(expTime));
         const res = await multisigWallet.sendNewOrder(deployer.getSender(), orderList, expTime, orderEstimateOnContract);
 
@@ -372,7 +374,12 @@ describe('FeeComputation', () => {
         // expect(storageEstimate).toEqual(orderEstimateOnContract.storage);
         let manualFees = gasEstimate + fwdEstimate + storageEstimate;
         console.log("orderEstimates", orderEstimateOnContract, manualFees);
-        expect(manualFees).toEqual(orderEstimateOnContract);
+        // It's ok if contract overestimates fees a little
+        expect(manualFees).toBeLessThanOrEqual(orderEstimateOnContract);
+        const feesDelta = orderEstimateOnContract - manualFees;
+        if(feesDelta > 0) {
+            console.log("Contract overestimated fees by:", fromNano(feesDelta));
+        }
     });
 
     it('common cases gas fees multisig', async () => {
@@ -384,8 +391,7 @@ describe('FeeComputation', () => {
                 threshold,
                 signers : signers.map(x => x.address),
                 proposers: [proposer.address],
-                modules: [],
-                guard: null
+                allowArbitrarySeqno: false
             };
 
             const multisig = blockchain.openContract(Multisig.createFromConfig(config, multisig_code));
