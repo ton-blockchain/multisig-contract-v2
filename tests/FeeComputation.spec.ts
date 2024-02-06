@@ -381,6 +381,8 @@ describe('FeeComputation', () => {
         let timeSpan  = 365 * 24 * 3600;
         await testOrderEstimate(multisigWallet, orderList, timeSpan);
     });
+
+    it('common cases gas fees multisig', async () => {
         const assertMultisig = async (threshold: number, total: number, txcount: number, lifetime: number, signer_creates: boolean) => {
             let totalGas = 0n;
             const testWallet = await blockchain.treasury('test_wallet'); // Make sure we don't bounce
