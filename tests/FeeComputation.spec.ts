@@ -199,14 +199,14 @@ describe('FeeComputation', () => {
     it('should send new order with contract estimated message value', async () => {
         const testAddr = randomAddress();
         const testMsg: TransferRequest = {type:"transfer", sendMode: 1, message: internal({to: testAddr, value: toNano('0.015'), body: beginCell().storeUint(12345, 32).endCell()})};
-        const orderList:Array<Action> = [testMsg,/*testMsg, testMsg, testMsg2*/];
+        const orderList:Array<Action> = [testMsg];
         let timeSpan  = 365 * 24 * 3600;
         await testOrderEstimate(multisigWallet, orderList, timeSpan);
     });
     it('should estimate correctly with 255 signers multisig', async () => {
         const testAddr = randomAddress();
         const testMsg: TransferRequest = {type:"transfer", sendMode: 1, message: internal({to: testAddr, value: toNano('0.015'), body: beginCell().storeUint(12345, 32).endCell()})};
-        const orderList:Array<Action> = [testMsg,/*testMsg, testMsg, testMsg2*/];
+        const orderList:Array<Action> = [testMsg];
         let timeSpan  = 365 * 24 * 3600;
         await testOrderEstimate(multisigJumbo, orderList, timeSpan);
     });
