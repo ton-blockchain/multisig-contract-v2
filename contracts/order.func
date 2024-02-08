@@ -224,7 +224,8 @@ slice get_text_comment(slice in_msg_body) impure inline {
         int signer_index = in_msg_body~load_index();
         in_msg_body.end_parse();
         (slice signer_address, int found?) = signers.udict_get?(INDEX_SIZE, signer_index);
-        throw_unless(error::unauthorized_sign, found? & equal_slices_bits(sender_address, signer_address));
+        throw_unless(error::unauthorized_sign, found?);
+        throw_unless(error::unauthorized_sign, equal_slices_bits(sender_address, signer_address));
 
         approve(signer_index, sender_address, query_id);
         return ();
