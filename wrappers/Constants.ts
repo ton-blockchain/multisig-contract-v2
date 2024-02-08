@@ -1,19 +1,19 @@
 export abstract class Op {
     static readonly multisig = {
-        new_order : 0x1,
-        execute: 0x2,
-        execute_internal: 0x3
+        new_order : 0xf718510f,
+        execute: 0x75097f5d,
+        execute_internal: 0xa32c59bf
     }
     static readonly order = {
-        approve: 0x8,
+        approve: 0xa762230f,
         expired: 0x6,
-        approve_rejected : 0x7,
-        approved: 0x9,
-        init: 0x5
+        approve_rejected : 0xafaf283e,
+        approved: 0x82609bf6,
+        init: 0x9c73fba2
     }
     static readonly actions = {
-        send_message: 10,
-        update_multisig_params: 11,
+        send_message: 0xf1381e5b,
+        update_multisig_params: 0x1d0cfbd3,
     }
 }
 
