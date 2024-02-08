@@ -978,6 +978,29 @@ describe('Multisig', () => {
                     });
                 }
             });
+            it('should allow to create order with maximum possible seqno', async () => {
+                const maxSeqno = (2n ** 256n) - 1n;
+                const maxOrderSeqno = 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffn
+                // Just in case
+                expect(maxSeqno).toEqual(maxOrderSeqno);
+                let orderAddress = await newMultisig.getOrderAddress(maxSeqno);
+                let res = await newMultisig.sendNewOrder(deployer.getSender(),
+                                                      [testMsg], curTime() + 100,
+                                                      toNano('0.5'), 0,
+                                                      true, maxSeqno);
+                expect(res.transactions).toHaveTransaction({
+                    on: newMultisig.address,
+                    from: deployer.address,
+                    op: Op.multisig.new_order,
+                    success: true
+                });
+                expect(res.transactions).toHaveTransaction({
+                    from: newMultisig.address,
+                    on: orderAddress,
+                    deploy: true,
+                    success: true
+                });
+            })
             it('subsequent order creation with same seqno should result in vote', async () => {
                 const rndSeqno  = BigInt(getRandomInt(100, 20000));
                 const orderContract = blockchain.openContract(Order.createFromAddress(

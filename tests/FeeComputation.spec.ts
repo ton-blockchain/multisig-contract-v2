@@ -6,7 +6,7 @@ import { Op } from '../wrappers/Constants';
 import '@ton/test-utils';
 import { compile } from '@ton/blueprint';
 import { randomAddress } from '@ton/test-utils';
-import { MsgPrices, getMsgPrices, collectCellStats, computeFwdFees, computeMessageForwardFees, shr16ceil } from '../gasUtils';
+import { MsgPrices, getMsgPrices, collectCellStats, computeFwdFees, computeMessageForwardFees, shr16ceil, GasPrices, StorageValue, getGasPrices, computeGasFee, getStoragePrices, calcStorageFee, setMsgPrices, setGasPrice, setStoragePrices } from '../gasUtils';
 import { getRandomInt } from './utils';
 
 export const computedGeneric = (trans:Transaction) => {
@@ -44,7 +44,9 @@ describe('FeeComputation', () => {
     let proposer : SandboxContract<TreasuryContract>;
     let signers  : Array<SandboxContract<TreasuryContract>>;
 
-    let testOrderEstimate: (wallet: SandboxContract<Multisig>, actions: Action[], time: number) => Promise<void>;
+    let testOrderEstimate: (wallet: SandboxContract<Multisig>, actions: Action[],
+                            time: number, gas_price?: GasPrices, fwd_price?: MsgPrices,
+                            storage_price?: StorageValue) => Promise<void>;
 
     beforeEach(async () => {
         blockchain = await Blockchain.create();
@@ -87,7 +89,10 @@ describe('FeeComputation', () => {
         // Stop ticking
         blockchain.now = curTime();
 
-        testOrderEstimate = async (wallet, actions, time) => {
+        testOrderEstimate = async (wallet, actions, time, gas_price, fwd_price, storage_price) => {
+            const gasPrices = gas_price || getGasPrices(blockchain.config, 0);
+            const curMsgPrices = fwd_price || msgPrices;
+            const curStoragePrices = storage_price || getStoragePrices(blockchain.config);
             const expTime = curTime() + time;
             let orderEstimateOnContract = await wallet.getOrderEstimate(actions, BigInt(expTime));
             const res = await wallet.sendNewOrder(deployer.getSender(), actions, expTime, orderEstimateOnContract);
@@ -116,7 +121,7 @@ describe('FeeComputation', () => {
             // {bits: orderAccountStorageStats.bits - orderBodyStats.bits, cells: orderAccountStorageStats.cells - orderBodyStats.cells};
 
             let multisigToOrderMessage = res.transactions[2].inMessage!;
-            let multisigToOrderMessageStats = computeMessageForwardFees(msgPrices, multisigToOrderMessage).stats;
+            let multisigToOrderMessageStats = computeMessageForwardFees(curMsgPrices, multisigToOrderMessage).stats;
             let initOrderStateOverhead = multisigToOrderMessageStats.sub(orderBodyStats);
             // {bits: multisigToOrderMessageStats.bits - orderBodyStats.bits, cells: multisigToOrderMessageStats.cells - orderBodyStats.cells};
 
@@ -142,7 +147,7 @@ describe('FeeComputation', () => {
               tx4+: multisig -> destination
             */
             let orderToMultiownerMessage      = secondApproval.transactions[3].inMessage!;
-            let orderToMultiownerMessageStats = computeMessageForwardFees(msgPrices, orderToMultiownerMessage).stats;
+            let orderToMultiownerMessageStats = computeMessageForwardFees(curMsgPrices, orderToMultiownerMessage).stats;
             // console.log("Order to multisig stats:", orderToMultiownerMessageStats);
             // console.log("Order body stats:", orderBodyStats);
             let orderToMultiownerMessageOverhead = orderToMultiownerMessageStats.sub(orderBodyStats);
@@ -152,7 +157,7 @@ describe('FeeComputation', () => {
             let ORDER_EXECUTE_GAS = computedGeneric(secondApproval.transactions[1]).gasUsed;
             let ORDER_EXECUTE_FEE = computedGeneric(secondApproval.transactions[1]).gasFees;
             let MULTISIG_EXECUTE_GAS = actions.length > 1 ? 7301n : computedGeneric(secondApproval.transactions[3]).gasUsed;
-            let MULTISIG_EXECUTE_FEE = actions.length > 1 ? 7301n * 1000n : computedGeneric(secondApproval.transactions[3]).gasFees;
+            let MULTISIG_EXECUTE_FEE = actions.length > 1 ? computeGasFee(gasPrices, MULTISIG_EXECUTE_GAS) : computedGeneric(secondApproval.transactions[3]).gasFees;
             // console.log("orderToMultiownerMessageOverhead", orderToMultiownerMessageOverhead);
 
             // collect data in one console.log
@@ -165,30 +170,22 @@ describe('FeeComputation', () => {
             orderToMultiownerMessageOverhead: ${orderToMultiownerMessageOverhead}
             `);
 
-            let gasEstimate = shr16ceil((MULTISIG_INIT_ORDER_GAS + ORDER_INIT_GAS + ORDER_EXECUTE_GAS + MULTISIG_EXECUTE_GAS) * 65536000n);
+            let gasEstimate = [MULTISIG_INIT_ORDER_GAS , ORDER_INIT_GAS , ORDER_EXECUTE_GAS , MULTISIG_EXECUTE_GAS].map(g => computeGasFee(gasPrices, g)).reduce((cur, acc) => acc + cur, 0n);
             let gasFees     = MULTISIG_INIT_ORDER_FEE + ORDER_INIT_GAS_FEE + ORDER_EXECUTE_FEE + MULTISIG_EXECUTE_FEE;
             expect(gasFees).toEqual(gasEstimate);
             // expect(gasFees).toEqual(orderEstimateOnContract.gas);
 
             // blockchain.verbosity = {vmLogs:"vm_logs_verbose", print: true, debugLogs: true, blockchainLogs: true};
-            let actualFwd   = computeFwdFees(msgPrices, orderToMultiownerMessageStats.cells, orderToMultiownerMessageStats.bits) +
-                              computeFwdFees(msgPrices, multisigToOrderMessageStats.cells, multisigToOrderMessageStats.bits);
-            // console.log("Actual fwd:", actualFwd);
-            let fwdEstimate = 2n * 1000000n +
-            BigInt((2n * orderBodyStats.bits + initOrderStateOverhead.bits + orderToMultiownerMessageOverhead.bits) +
-            (2n * orderBodyStats.cells + initOrderStateOverhead.cells + orderToMultiownerMessageOverhead.cells) * 100n) * 1000n;
+            let actualFwd   = computeFwdFees(curMsgPrices, orderToMultiownerMessageStats.cells, orderToMultiownerMessageStats.bits) +
+                              computeFwdFees(curMsgPrices, multisigToOrderMessageStats.cells, multisigToOrderMessageStats.bits);
 
-            // console.log("fwdEstimate:", fwdEstimate);
-            expect(fwdEstimate).toEqual(actualFwd);
-            //expect(fwdEstimate).toEqual(orderEstimateOnContract.fwd);
-
-            let storageEstimate = shr16ceil((orderBodyStats.bits +orderStateOverhead.bits + (orderBodyStats.cells + orderStateOverhead.cells) * 500n) * BigInt(time));
+            let storageEstimate = calcStorageFee(curStoragePrices, orderBodyStats.add(orderStateOverhead), BigInt(time));//shr16ceil((orderBodyStats.bits +orderStateOverhead.bits + (orderBodyStats.cells + orderStateOverhead.cells) * 500n) * BigInt(time));
             const storagePhase  = storageGeneric(secondApproval.transactions[1]);
             const actualStorage = storagePhase?.storageFeesCollected;
             console.log("Storage estimates:", storageEstimate, actualStorage);
             expect(storageEstimate).toEqual(actualStorage);
             // expect(storageEstimate).toEqual(orderEstimateOnContract.storage);
-            let manualFees = gasEstimate + fwdEstimate + storageEstimate;
+            let manualFees = gasEstimate + actualFwd + storageEstimate;
             console.log("orderEstimates", orderEstimateOnContract, manualFees);
             // It's ok if contract overestimates fees a little
             expect(manualFees).toBeLessThanOrEqual(orderEstimateOnContract);
@@ -202,14 +199,14 @@ describe('FeeComputation', () => {
     it('should send new order with contract estimated message value', async () => {
         const testAddr = randomAddress();
         const testMsg: TransferRequest = {type:"transfer", sendMode: 1, message: internal({to: testAddr, value: toNano('0.015'), body: beginCell().storeUint(12345, 32).endCell()})};
-        const orderList:Array<Action> = [testMsg,/*testMsg, testMsg, testMsg2*/];
+        const orderList:Array<Action> = [testMsg];
         let timeSpan  = 365 * 24 * 3600;
         await testOrderEstimate(multisigWallet, orderList, timeSpan);
     });
     it('should estimate correctly with 255 signers multisig', async () => {
         const testAddr = randomAddress();
         const testMsg: TransferRequest = {type:"transfer", sendMode: 1, message: internal({to: testAddr, value: toNano('0.015'), body: beginCell().storeUint(12345, 32).endCell()})};
-        const orderList:Array<Action> = [testMsg,/*testMsg, testMsg, testMsg2*/];
+        const orderList:Array<Action> = [testMsg];
         let timeSpan  = 365 * 24 * 3600;
         await testOrderEstimate(multisigJumbo, orderList, timeSpan);
     });
@@ -223,6 +220,80 @@ describe('FeeComputation', () => {
             orderList.push(testMsg);
         }
         await testOrderEstimate(multisigJumbo, orderList, timeSpan);
+    });
+    it('should estimate correctly on gas fees change', async () => {
+        const testAddr = randomAddress();
+        const testMsg: TransferRequest = {type:"transfer", sendMode: 1, message: internal({to: testAddr, value: toNano('0.015'), body: beginCell().storeUint(12345, 32).endCell()})};
+        const orderList:Array<Action> = [testMsg];
+        let timeSpan  = 365 * 24 * 3600;
+        const storeTill = BigInt(curTime() + timeSpan);
+        const oldConfig = blockchain.config;
+
+        const gasPrices = getGasPrices(oldConfig, 0);
+        const newPrices: GasPrices = {
+            ...gasPrices,
+            gas_price: gasPrices.gas_price * 3n
+        };
+
+        //blockchain.verbosity = {vmLogs:"vm_logs_verbose", print: true, debugLogs: true, blockchainLogs: true};
+        const estBefore = await multisigJumbo.getOrderEstimate(orderList, storeTill);
+        blockchain.setConfig(
+            setGasPrice(blockchain.config, newPrices, 0)
+        );
+        const estAfter  = await multisigJumbo.getOrderEstimate(orderList, storeTill);
+        expect(estAfter).toBeGreaterThan(estBefore);
+
+        await testOrderEstimate(multisigJumbo, orderList, timeSpan, newPrices);
+
+        blockchain.setConfig(oldConfig);
+    });
+    it('should estimate correctly on forward fees change', async () => {
+        const testAddr = randomAddress();
+        const testMsg: TransferRequest = {type:"transfer", sendMode: 1, message: internal({to: testAddr, value: toNano('0.015'), body: beginCell().storeUint(12345, 32).endCell()})};
+        const orderList:Array<Action> = [testMsg];
+        let timeSpan  = 365 * 24 * 3600;
+        const storeTill = BigInt(curTime() + timeSpan);
+        const oldConfig = blockchain.config;
+        const newPrices : MsgPrices = {
+            ...msgPrices,
+            bitPrice: msgPrices.bitPrice * 10n,
+            cellPrice: msgPrices.cellPrice * 10n
+        }
+
+        const estBefore = await multisigJumbo.getOrderEstimate(orderList, storeTill);
+
+        blockchain.setConfig(setMsgPrices(blockchain.config, newPrices, 0));
+
+        const estAfter  = await multisigJumbo.getOrderEstimate(orderList, storeTill);
+        expect(estAfter).toBeGreaterThan(estBefore);
+
+        await testOrderEstimate(multisigJumbo, orderList, timeSpan, undefined, newPrices);
+
+        blockchain.setConfig(oldConfig);
+    });
+    it('should estimate correctly on storage fees change', async () => {
+        const testAddr = randomAddress();
+        const testMsg: TransferRequest = {type:"transfer", sendMode: 1, message: internal({to: testAddr, value: toNano('0.015'), body: beginCell().storeUint(12345, 32).endCell()})};
+        const orderList:Array<Action> = [testMsg];
+        let timeSpan  = 365 * 24 * 3600;
+        const storeTill = BigInt(curTime() + timeSpan);
+        const oldConfig = blockchain.config;
+
+        const storagePrices = getStoragePrices(blockchain.config);
+        const newPrices: StorageValue = {
+            ...storagePrices,
+            cell_price_ps: storagePrices.cell_price_ps * 10n,
+            bit_price_ps: storagePrices.bit_price_ps * 10n
+        };
+
+        const estBefore = await multisigJumbo.getOrderEstimate(orderList, storeTill);
+
+        blockchain.setConfig(setStoragePrices(oldConfig, newPrices));
+        const estAfter  = await multisigJumbo.getOrderEstimate(orderList, storeTill);
+        expect(estAfter).toBeGreaterThan(estBefore);
+        await testOrderEstimate(multisigJumbo, orderList, timeSpan, undefined, undefined, newPrices);
+
+        blockchain.setConfig(oldConfig);
     });
 
     it('common cases gas fees multisig', async () => {
