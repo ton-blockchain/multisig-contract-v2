@@ -203,10 +203,11 @@ slice get_text_comment(slice in_msg_body) impure inline {
         } else {
             ;; order is inited second time, if it is inited by another oracle
             ;; we count it as approval
-            in_msg_body~load_index(); ;; threshold
-            in_msg_body~load_nonempty_dict(); ;; signers
-            in_msg_body~load_timestamp(); ;; expiration_date
-            in_msg_body~skip_ref(); ;; order
+            throw_unless(error::already_inited, in_msg_body~load_index() == threshold);
+            throw_unless(error::already_inited, in_msg_body~load_nonempty_dict().cell_hash() == signers.cell_hash());
+            throw_unless(error::already_inited,in_msg_body~load_timestamp() == expiration_date);
+            throw_unless(error::already_inited, in_msg_body~load_ref().cell_hash() == order.cell_hash());
+
             int approve_on_init? = in_msg_body~load_bool();
             throw_unless(error::already_inited, approve_on_init?);
             int signer_index = in_msg_body~load_index();
