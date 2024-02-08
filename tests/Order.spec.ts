@@ -270,6 +270,52 @@ describe('Order', () => {
         // To be extra sure that there is no commit()
         expect(dataBefore).toEqualCell(await getContractData(orderContract.address));
     });
+    it('order contract should reject secondary init vote if any of order info has changed', async() => {
+        const approveOnInit = true;
+        const idx           = 0;
+        const newSigners    = (await blockchain.createWallets(10)).map(s => s.address);
+        const curSigners    = signers.map(s => s.address);
+        const stateBefore   = await getContractData(orderContract.address);
+        const expInited     = Errors.order.already_inited;
+        const expSuccess    = 0;
+        const dataBefore    = await orderContract.getOrderData();
+        const expDate       = Number(dataBefore.expiration_date);
+
+        let   testInit = async (signers: Address[], expDate : number, order: Cell, threshold: number, exp: number) => {;
+            const res = await orderContract.sendDeploy(multisig.getSender(), toNano('1'), signers, expDate, order, threshold, approveOnInit, idx);
+            expect(res.transactions).toHaveTransaction({
+                on: orderContract.address,
+                from: multisig.address,
+                success: exp == 0,
+                aborted: exp != 0,
+                exitCode: exp
+            });
+            if(exp == 0) {
+                const dataAfter = await orderContract.getOrderData();
+                expect(dataAfter.approvals_num).toEqual(Number(dataBefore.approvals_num) + 1);
+                expect(dataAfter._approvals).toBeGreaterThan(dataBefore._approvals ?? 0n);
+                expect(dataAfter.approvals[idx]).toBe(true);
+            }
+            else {
+                expect(await getContractData(orderContract.address)).toEqualCell(stateBefore);
+            }
+        }
+        // Change signers
+        await testInit(newSigners, expDate, mockOrder, threshold, expInited);
+        // Change expDate
+        await testInit(curSigners, expDate + getRandomInt(100, 200), mockOrder, threshold, expInited);
+        // Change order
+        const testMsg : TransferRequest = { type: "transfer", sendMode: 1, message: internal_relaxed({to: randomAddress(0), value: ('0.015'), body: beginCell().storeUint(getRandomInt(100000, 200000), 32).endCell()})};
+        const newOrder = Multisig.packOrder([testMsg]);
+
+        expect(newOrder).not.toEqualCell(mockOrder);
+
+        await testInit(curSigners, expDate, newOrder, threshold, expInited);
+        // Change threshold
+        await testInit(curSigners, expDate, mockOrder, threshold + getRandomInt(10, 20), expInited);
+        // Expect success
+        await testInit(curSigners, expDate, mockOrder, threshold, expSuccess);
+    });
     it('order contract should treat multiple init messages as votes if approve_on_init = true', async () => {
         const approveOnInit = true;
         for(let i = 0; i < threshold; i++) {
