@@ -35,6 +35,7 @@ int validate_dictionary_sequence(cell dict) impure inline {
                 ;; Potentially multisig can init order in this request, but since
                 ;; order will reject second initialisation there is no security issue
                 send_raw_message(action~load_ref(), mode);
+                action.end_parse();
             } elseif (action_op == actions::update_multisig_params) {
                 threshold = action~load_index();
                 signers = action~load_nonempty_dict();
@@ -44,6 +45,8 @@ int validate_dictionary_sequence(cell dict) impure inline {
 
                 proposers = action~load_dict();
                 validate_dictionary_sequence(proposers);
+
+                action.end_parse();
             }
         }
     } until (~ found?);
@@ -106,6 +109,7 @@ int validate_dictionary_sequence(cell dict) impure inline {
         int index = in_msg_body~load_index();
         int expiration_date = in_msg_body~load_timestamp();
         cell order_body = in_msg_body~load_ref();
+        in_msg_body.end_parse();
         (slice expected_address, int found?) = (signer? ? signers : proposers).udict_get?(INDEX_SIZE, index);
         throw_unless(error::unauthorized_new_order, found?);
         throw_unless(error::unauthorized_new_order, equal_slices_bits(sender_address, expected_address));
@@ -144,6 +148,7 @@ int validate_dictionary_sequence(cell dict) impure inline {
         int approvals_num = in_msg_body~load_index();
         int signers_hash = in_msg_body~load_hash();
         cell order_body = in_msg_body~load_ref();
+        in_msg_body.end_parse();
 
         cell state_init = calculate_order_state_init(my_address(), order_seqno);
         slice order_address = calculate_address_by_state_init(BASECHAIN, state_init);
@@ -159,6 +164,7 @@ int validate_dictionary_sequence(cell dict) impure inline {
 
         throw_unless(error::unauthorized_execute, equal_slices_bits(sender_address, my_address()));
         cell order_body = in_msg_body~load_ref();
+        in_msg_body.end_parse();
         (threshold, signers, signers_num, proposers)~execute_order(order_body);
     }
 
