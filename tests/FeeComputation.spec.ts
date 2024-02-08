@@ -156,7 +156,7 @@ describe('FeeComputation', () => {
 
             let ORDER_EXECUTE_GAS = computedGeneric(secondApproval.transactions[1]).gasUsed;
             let ORDER_EXECUTE_FEE = computedGeneric(secondApproval.transactions[1]).gasFees;
-            let MULTISIG_EXECUTE_GAS = actions.length > 1 ? 7301n : computedGeneric(secondApproval.transactions[3]).gasUsed;
+            let MULTISIG_EXECUTE_GAS = actions.length > 1 ? 7310n : computedGeneric(secondApproval.transactions[3]).gasUsed;
             let MULTISIG_EXECUTE_FEE = actions.length > 1 ? computeGasFee(gasPrices, MULTISIG_EXECUTE_GAS) : computedGeneric(secondApproval.transactions[3]).gasFees;
             // console.log("orderToMultiownerMessageOverhead", orderToMultiownerMessageOverhead);
 
