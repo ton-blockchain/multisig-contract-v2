@@ -4,62 +4,45 @@
 #include "messages.func";
 #include "errors.func";
 
-((int, int), ()) ~add_approval((int, int) approve_data, int signer_index) impure inline {
-    (int approvals_mask, int approvals_num) = approve_data;
-    int mask = 1 << signer_index;
-    throw_if(error::already_approved, approvals_mask & mask);
-    approvals_num += 1;
-    approvals_mask |= mask;
-    return ((approvals_mask, approvals_num), ());
-}
+;; DATA
 
-(slice, int, int, int, cell, int, int, int, cell) load_data() inline {
+global slice multisig_address;
+global int order_seqno;
+global int threshold;
+global int executed?;
+global cell signers;
+global int approvals_mask;
+global int approvals_num;
+global int expiration_date;
+global cell order;
+
+() load_data() impure inline {
     slice ds = get_data().begin_parse();
-    (slice multisig_address, int order_seqno) = (ds~load_msg_addr(), ds~load_order_seqno());
+    multisig_address = ds~load_msg_addr();
+    order_seqno = ds~load_order_seqno();
 
     if (ds.slice_bits() == 0) {
-        return (multisig_address, order_seqno, null(), null(), null(), null(), null(), null(), null());
+        ;; not initialized yet
+        threshold = null();
+        executed? = null();
+        signers = null();
+        approvals_mask = null();
+        approvals_num = null();
+        expiration_date = null();
+        order = null();
+    } else {
+        threshold = ds~load_index();
+        executed? = ds~load_bool();
+        signers = ds~load_nonempty_dict();
+        approvals_mask = ds~load_uint(MASK_SIZE);
+        approvals_num = ds~load_index();
+        expiration_date = ds~load_timestamp();
+        order = ds~load_ref();
+        ds.end_parse();
     }
-
-    (int threshold,
-        int executed?,
-        cell signers,
-        int approvals_mask,
-        int approvals_num,
-        int expiration_date,
-        cell order) = (
-        ds~load_index(), ;; threshold
-        ds~load_bool(), ;; executed?,
-        ds~load_nonempty_dict(), ;; signers
-        ds~load_uint(MASK_SIZE), ;; approvals_mask
-        ds~load_index(), ;; approvals_num
-        ds~load_timestamp(), ;; expiration_date
-        ds~load_ref() ;; order
-    );
-
-    ds.end_parse();
-
-    return (multisig_address,
-        order_seqno,
-        threshold,
-        executed?,
-        signers,
-        approvals_mask,
-        approvals_num,
-        expiration_date,
-        order);
 }
 
-() save_data(
-slice multisig_address,
-int order_seqno,
-int threshold,
-int executed?,
-cell signers,
-int approvals_mask,
-int approvals_num,
-int expiration_date,
-cell order) impure inline {
+() save_data() impure inline {
     set_data(
         begin_cell()
         .store_slice(multisig_address)
@@ -75,127 +58,49 @@ cell order) impure inline {
     );
 }
 
-() recv_internal(int balance, int msg_value, cell in_msg_full, slice in_msg_body) {
-    slice in_msg_full_slice = in_msg_full.begin_parse();
-    int msg_flags = in_msg_full_slice~load_msg_flags();
-    if (is_bounced(msg_flags)) {
-        return ();
-    }
-    slice sender_address = in_msg_full_slice~load_msg_addr();
+;; UTILS
 
-    int op = in_msg_body~load_op();
-    int query_id = cur_lt();
+slice get_text_comment(slice in_msg_body) impure inline {
+    if (in_msg_body.slice_refs() == 0) {
+        return in_msg_body;
+    }
+
+    ;;combine comment into one slice
+    builder combined_string = begin_cell();
+    do {
+        ;; store all bits from current cell
+        ;; it's ok to overflow here, it means that comment is incorrect
+        combined_string.store_slice(in_msg_body.preload_bits(in_msg_body.slice_bits()));
+        ;;and go to the next
+        in_msg_body = in_msg_body.preload_ref().begin_parse();
+    } until (~ in_msg_body.slice_refs());
+    return combined_string.end_cell().begin_parse();
+}
+
+(int, int) find_signer_by_address(slice signer_address) impure inline {
+    int found_signer? = false;
     int signer_index = -1;
-
-    (slice multisig_address, int order_seqno, int threshold,
-        int executed?, cell signers,
-        int approvals_mask, int approvals_num, int expiration_date,
-        cell order) = load_data();
-
-    if (op == 0) {
-        ;; message with text comment
-        if(in_msg_body.slice_refs()) { ;;combine comment into one slice
-            builder combined_string = begin_cell();
-            do {
-                ;; store all bits from current cell
-                ;; it's ok to overflow here, it means that comment is incorrect
-                combined_string.store_slice(in_msg_body.preload_bits(in_msg_body.slice_bits()));
-                ;;and go to the next
-                in_msg_body = in_msg_body.preload_ref().begin_parse();
-            } until (~ in_msg_body.slice_refs());
-            in_msg_body = combined_string.end_cell().begin_parse();
-        }
-        throw_unless(error::unknown_op,
-                     equal_slices_bits(in_msg_body, "approve"));
-
-        ;; lets find signer in the signers dict
-        int found_signer? = false;
-        do {
-            (signer_index, slice value, int next_found?) = signers.udict_get_next?(INDEX_SIZE, signer_index);
-            if (next_found?) {
-                if (equal_slices_bits(sender_address, value)) {
-                    found_signer? = true;
-                    next_found? = false; ;; fast way to exit loop
-                }
+    do {
+        (signer_index, slice value, int next_found?) = signers.udict_get_next?(INDEX_SIZE, signer_index);
+        if (next_found?) {
+            if (equal_slices_bits(signer_address, value)) {
+                found_signer? = true;
+                next_found? = false; ;; fast way to exit loop
             }
-        } until (~ next_found?);
-
-        throw_unless(error::unauthorized_sign, found_signer?);
-
-        op = op::approve;
-
-    } else {
-        query_id = in_msg_body~load_query_id();
-    }
-
-    int need_check_threshold? = false;
-    if (op == op::init) {
-        throw_unless(error::unauthorized_init, equal_slices_bits(sender_address, multisig_address));
-        if(null?(threshold)) {
-            ;; Let's init
-            threshold = in_msg_body~load_index();
-            executed? = false;
-            signers = in_msg_body~load_nonempty_dict();
-            approvals_mask = 0;
-            approvals_num = 0;
-            expiration_date = in_msg_body~load_timestamp();
-            throw_unless(error::expired, expiration_date >= now());
-            order = in_msg_body~load_ref();
-            int approve_on_init? = in_msg_body~load_bool();
-            if (approve_on_init?) {
-                int init_signer_index = in_msg_body~load_index();
-                (approvals_mask, approvals_num)~add_approval(init_signer_index);
-                need_check_threshold? = true;
-            }
-        } else {
-            ;; order is inited second time, if it is inited by another oracle
-            ;; we count it as approval
-            op = op::approve;
-            in_msg_body~load_index();
-            in_msg_body~load_nonempty_dict();
-            in_msg_body~load_timestamp();
-            in_msg_body~skip_ref();
-            int approve_on_init? = in_msg_body~load_bool();
-            throw_unless(error::already_inited, approve_on_init?);
-            signer_index = in_msg_body~load_index();
-            (sender_address, _) = signers.udict_get?(INDEX_SIZE, signer_index);
         }
-    }
-    if (op == op::approve) {
-        try {
-            throw_if(error::expired, now() > expiration_date);
-            throw_if(error::already_executed, executed?);
-             if (signer_index == -1) {
-                    signer_index = in_msg_body~load_index();
-                    (slice signer, int found?) = signers.udict_get?(INDEX_SIZE, signer_index);
-                    throw_unless(error::unauthorized_sign, found? & equal_slices_bits(sender_address, signer));
-             }
+    } until (~ next_found?);
+    return (signer_index, found_signer?);
+}
 
-            (approvals_mask, approvals_num)~add_approval(signer_index);
-            need_check_threshold? = true;
-            send_message_with_only_body(
-                sender_address,
-                0,
-                begin_cell().store_op_and_query_id(op::approve_accepted, query_id),
-                NON_BOUNCEABLE,
-                SEND_MODE_CARRY_ALL_REMAINING_MESSAGE_VALUE | SEND_MODE_BOUNCE_ON_ACTION_FAIL
-            );
-        } catch ( _, exit_code) {
-            send_message_with_only_body(
-                    sender_address,
-                    0,
-                    begin_cell().store_op_and_query_id(op::approve_rejected, query_id)
-                                .store_uint(exit_code, 32),
-                    NON_BOUNCEABLE,
-                    SEND_MODE_CARRY_ALL_REMAINING_MESSAGE_VALUE | SEND_MODE_BOUNCE_ON_ACTION_FAIL
-            );
-        }
-    } else {
-        throw_unless(error::unknown_op, op == op::init);
-    }
+() add_approval(int signer_index) impure inline {
+    int mask = 1 << signer_index;
+    throw_if(error::already_approved, approvals_mask & mask);
+    approvals_num += 1;
+    approvals_mask |= mask;
+}
 
-    ;; Order can be approved through approve and also through init (if threshold == 1)
-    if (need_check_threshold? & (approvals_num == threshold)) {
+() try_execute(int query_id) impure inline_ref {
+    if (approvals_num == threshold) {
         send_message_with_only_body(
             multisig_address,
             0,
@@ -211,12 +116,132 @@ cell order) impure inline {
         );
         executed? = true;
     }
-    save_data(multisig_address, order_seqno, threshold,
-        executed?, signers,
-        approvals_mask, approvals_num, expiration_date,
-        order);
 }
 
+() approve(int signer_index, slice signer_address, int query_id) impure inline_ref {
+    try {
+        throw_if(error::expired, now() > expiration_date);
+        throw_if(error::already_executed, executed?);
+
+        add_approval(signer_index);
+
+        send_message_with_only_body(
+            signer_address,
+            0,
+            begin_cell().store_op_and_query_id(op::approve_accepted, query_id),
+            NON_BOUNCEABLE,
+            SEND_MODE_CARRY_ALL_REMAINING_MESSAGE_VALUE | SEND_MODE_BOUNCE_ON_ACTION_FAIL
+        );
+
+        try_execute(query_id);
+
+        save_data();
+
+    } catch (_, exit_code) {
+        send_message_with_only_body(
+            signer_address,
+            0,
+            begin_cell()
+            .store_op_and_query_id(op::approve_rejected, query_id)
+            .store_uint(exit_code, 32),
+            NON_BOUNCEABLE,
+            SEND_MODE_CARRY_ALL_REMAINING_MESSAGE_VALUE | SEND_MODE_BOUNCE_ON_ACTION_FAIL
+        );
+    }
+}
+
+;; RECEIVE
+
+() recv_internal(int balance, int msg_value, cell in_msg_full, slice in_msg_body) {
+    slice in_msg_full_slice = in_msg_full.begin_parse();
+    int msg_flags = in_msg_full_slice~load_msg_flags();
+    if (is_bounced(msg_flags)) {
+        return ();
+    }
+    slice sender_address = in_msg_full_slice~load_msg_addr();
+
+    int op = in_msg_body~load_op();
+
+    load_data();
+
+    if (op == 0) {
+        ;; message with text comment
+        slice text_comment = get_text_comment(in_msg_body);
+        throw_unless(error::unknown_op, equal_slices_bits(text_comment, "approve"));
+
+        (int signer_index, int found_signer?) = find_signer_by_address(sender_address);
+        throw_unless(error::unauthorized_sign, found_signer?);
+
+        approve(signer_index, sender_address, cur_lt());
+        return ();
+    }
+
+    int query_id = in_msg_body~load_query_id();
+
+    if (op == op::init) {
+        throw_unless(error::unauthorized_init, equal_slices_bits(sender_address, multisig_address));
+
+        if (null?(threshold)) {
+            ;; Let's init
+            threshold = in_msg_body~load_index();
+            executed? = false;
+            signers = in_msg_body~load_nonempty_dict();
+            approvals_mask = 0;
+            approvals_num = 0;
+            expiration_date = in_msg_body~load_timestamp();
+            throw_unless(error::expired, expiration_date >= now());
+            order = in_msg_body~load_ref();
+
+            int approve_on_init? = in_msg_body~load_bool();
+            if (approve_on_init?) {
+                int signer_index = in_msg_body~load_index();
+                add_approval(signer_index);
+                try_execute(query_id);
+            }
+            save_data();
+            return ();
+        } else {
+            ;; order is inited second time, if it is inited by another oracle
+            ;; we count it as approval
+            in_msg_body~load_index(); ;; threshold
+            in_msg_body~load_nonempty_dict(); ;; signers
+            in_msg_body~load_timestamp(); ;; expiration_date
+            in_msg_body~skip_ref(); ;; order
+            int approve_on_init? = in_msg_body~load_bool();
+            throw_unless(error::already_inited, approve_on_init?);
+            int signer_index = in_msg_body~load_index();
+            (slice signer_address, int found?) = signers.udict_get?(INDEX_SIZE, signer_index);
+            throw_unless(error::unauthorized_sign, found?);
+            approve(signer_index, signer_address, query_id);
+            return ();
+        }
+    }
+
+    if (op == op::approve) {
+        int signer_index = in_msg_body~load_index();
+        (slice signer_address, int found?) = signers.udict_get?(INDEX_SIZE, signer_index);
+        throw_unless(error::unauthorized_sign, found? & equal_slices_bits(sender_address, signer_address));
+
+        approve(signer_index, sender_address, query_id);
+        return ();
+    }
+
+    throw_unless(error::unknown_op, op == op::init);
+}
+
+;; GET-METHODS
+
 _ get_order_data() method_id {
-    return load_data();
+    load_data();
+    return (
+        multisig_address,
+        order_seqno,
+        threshold,
+        executed?,
+        signers,
+        approvals_mask,
+        approvals_num,
+        expiration_date,
+        order
+    );
 }
