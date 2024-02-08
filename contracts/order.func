@@ -226,7 +226,7 @@ slice get_text_comment(slice in_msg_body) impure inline {
         return ();
     }
 
-    throw_unless(error::unknown_op, op == op::init);
+    throw(error::unknown_op);
 }
 
 ;; GET-METHODS

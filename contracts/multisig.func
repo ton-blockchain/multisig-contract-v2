@@ -40,10 +40,9 @@ int validate_dictionary_sequence(cell dict) impure inline {
                 signers = action~load_nonempty_dict();
                 signers_num = validate_dictionary_sequence(signers);
                 throw_unless(error::invalid_signers, signers_num >= 1);
-                proposers = action~load_dict();
-
                 throw_unless(error::invalid_threshold, threshold <= signers_num);
 
+                proposers = action~load_dict();
                 validate_dictionary_sequence(proposers);
             }
         }
@@ -94,12 +93,14 @@ int validate_dictionary_sequence(cell dict) impure inline {
 
     if (op == op::new_order) {
         int order_seqno = in_msg_body~load_order_seqno();
-        if (allow_arbitrary_order_seqno == false) {
-            order_seqno = (order_seqno == MAX_ORDER_SEQNO) ? next_order_seqno : order_seqno;
-            throw_unless(error::invalid_new_order, (order_seqno == next_order_seqno));
+        if (~ allow_arbitrary_order_seqno) {
+            if (order_seqno == MAX_ORDER_SEQNO) {
+                order_seqno = next_order_seqno;
+            } else {
+                throw_unless(error::invalid_new_order, (order_seqno == next_order_seqno));
+            }
             next_order_seqno += 1;
         }
-
 
         int signer? = in_msg_body~load_bool();
         int index = in_msg_body~load_index();
