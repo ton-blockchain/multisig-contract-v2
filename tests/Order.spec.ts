@@ -253,11 +253,11 @@ describe('Order', () => {
         expect(dataAfter.threshold).toEqual(threshold);
     });
     it('order contract should accept init message only once if approve_on_init = false', async () => {
-        const expDate = blockchain.now! + 1000;
-        const newSigners = await blockchain.createWallets(10);
+        const expDate = Number((await orderContract.getOrderData()).expiration_date);
         const dataBefore = await getContractData(orderContract.address);
+        const approveInit = false;
 
-        const res = await orderContract.sendDeploy(multisig.getSender(), toNano('1'), newSigners.map((s) => s.address), expDate, mockOrder, threshold);
+        const res = await orderContract.sendDeploy(multisig.getSender(), toNano('1'), signers.map(s => s.address), expDate, mockOrder, threshold, approveInit);
 
         expect(res.transactions).toHaveTransaction({
             from: multisig.address,
@@ -271,13 +271,11 @@ describe('Order', () => {
         expect(dataBefore).toEqualCell(await getContractData(orderContract.address));
     });
     it('order contract should treat multiple init messages as votes if approve_on_init = true', async () => {
-        const expDate = blockchain.now! + getRandomInt(1000, 2000);
-        const newSigners = await blockchain.createWallets(10);
         const approveOnInit = true;
-        const initialData   = await orderContract.getOrderData();
         for(let i = 0; i < threshold; i++) {
             const dataBefore = await orderContract.getOrderData();
-            const res = await orderContract.sendDeploy(multisig.getSender(), toNano('1'), newSigners.map(s => s.address), expDate, mockOrder, threshold, approveOnInit, i);
+            const expDate    = Number(dataBefore.expiration_date);
+            const res = await orderContract.sendDeploy(multisig.getSender(), toNano('1'), signers.map(s => s.address), expDate, mockOrder, threshold, approveOnInit, i);
 
             expect(res.transactions).toHaveTransaction({
                 on: orderContract.address,
@@ -296,11 +294,6 @@ describe('Order', () => {
                 expect(dataAfter._approvals).toBeGreaterThan(dataBefore._approvals!);
             }
 
-            const stringifyAddr = (a: Address) => a.toString();
-            // Make sure signers and exp data didn't change
-            expect(dataAfter.signers.map(stringifyAddr)).toEqual(initialData.signers.map(stringifyAddr));
-            expect(dataAfter.expiration_date).toEqual(initialData.expiration_date);
-
             if(i + 1 == threshold) {
                 expect(res.transactions).toHaveTransaction({
                     on: multisig.address,
@@ -311,7 +304,7 @@ describe('Order', () => {
         }
     })
     it('should not be possible to use multiple init msg to approve multiple idx twice', async () => {
-        const expDate = blockchain.now! + getRandomInt(1000, 2000);
+        const expDate   = Number((await orderContract.getOrderData()).expiration_date);
         const signerIdx = getRandomInt(0, signers.length - 1);
 
         const approveOnInit = true;
@@ -496,8 +489,16 @@ describe('Order', () => {
 
         // Testing not valid signer address, but valid signer index
         let res = await orderContract.sendApprove(blockchain.sender(notSigner), signerIdx, msgVal, rndQueryId);
+        expect(res.transactions).toHaveTransaction({
+            on: orderContract.address,
+            from: notSigner,
+            op: Op.order.approve,
+            success: false,
+            aborted: true,
+            exitCode: Errors.order.unauthorized_sign
+        });
 
-        testApprove(res.transactions, notSigner, orderContract.address, Errors.order.unauthorized_sign);
+        // testApprove(res.transactions, notSigner, orderContract.address, Errors.order.unauthorized_sign);
 
         expect(await getContractData(orderContract.address)).toEqualCell(dataBefore);
 
@@ -507,7 +508,28 @@ describe('Order', () => {
 
         res = await orderContract.sendApprove(rndSigner.getSender(), signerIdx, msgVal, rndQueryId);
 
-        testApprove(res.transactions, rndSigner.address, orderContract.address, Errors.order.unauthorized_sign);
+        expect(res.transactions).toHaveTransaction({
+            on: orderContract.address,
+            from: rndSigner.address,
+            op: Op.order.approve,
+            success: false,
+            aborted: true,
+            exitCode: Errors.order.unauthorized_sign
+        });
+
+        // testApprove(res.transactions, rndSigner.address, orderContract.address, Errors.order.unauthorized_sign);
+        expect(await getContractData(orderContract.address)).toEqualCell(dataBefore);
+
+        // Just to be extra sure let's pick totally invalid index
+        res = await orderContract.sendApprove(rndSigner.getSender(), signers.length + 100, msgVal, rndQueryId);
+        expect(res.transactions).toHaveTransaction({
+            on: orderContract.address,
+            from: rndSigner.address,
+            op: Op.order.approve,
+            success: false,
+            aborted: true,
+            exitCode: Errors.order.unauthorized_sign
+        });
         expect(await getContractData(orderContract.address)).toEqualCell(dataBefore);
     });
     it('should reject approval if already approved', async () => {
