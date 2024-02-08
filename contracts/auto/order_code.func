@@ -1,1 +1,1 @@
-cell order_code() asm "<b 2 8 u, 0x2d04b864349821df0f3743abd25ecf018b2b7c0a475551753f49ed8978c9c286 256 u, b>spec PUSHREF";
+cell order_code() asm "<b 2 8 u, 0x87d7e8b477316c55ed5ed70494a20903ee764e0e27ee08cb4b607f4251f08668 256 u, b>spec PUSHREF";
