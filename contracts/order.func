@@ -67,13 +67,20 @@ slice get_text_comment(slice in_msg_body) impure inline {
 
     ;;combine comment into one slice
     builder combined_string = begin_cell();
+    int need_exit = false;
     do {
         ;; store all bits from current cell
         ;; it's ok to overflow here, it means that comment is incorrect
-        combined_string.store_slice(in_msg_body.preload_bits(in_msg_body.slice_bits()));
+        combined_string = combined_string.store_slice(in_msg_body.preload_bits(in_msg_body.slice_bits()));
         ;;and go to the next
-        in_msg_body = in_msg_body.preload_ref().begin_parse();
-    } until (~ in_msg_body.slice_refs());
+
+        if (in_msg_body.slice_refs()) {
+            in_msg_body = in_msg_body.preload_ref().begin_parse();
+        } else {
+            need_exit = true;
+        }
+
+    } until (need_exit);
     return combined_string.end_cell().begin_parse();
 }
 
