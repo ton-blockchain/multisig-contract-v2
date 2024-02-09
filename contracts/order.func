@@ -125,7 +125,7 @@ slice get_text_comment(slice in_msg_body) impure inline {
     }
 }
 
-() approve(int signer_index, slice signer_address, int query_id) impure inline_ref {
+() approve(int signer_index, slice response_address, int query_id) impure inline_ref {
     try {
         throw_if(error::expired, now() > expiration_date);
         throw_if(error::already_executed, executed?);
@@ -133,7 +133,7 @@ slice get_text_comment(slice in_msg_body) impure inline {
         add_approval(signer_index);
 
         send_message_with_only_body(
-            signer_address,
+            response_address,
             0,
             begin_cell().store_op_and_query_id(op::approve_accepted, query_id),
             NON_BOUNCEABLE,
@@ -146,7 +146,7 @@ slice get_text_comment(slice in_msg_body) impure inline {
 
     } catch (_, exit_code) {
         send_message_with_only_body(
-            signer_address,
+            response_address,
             0,
             begin_cell()
             .store_op_and_query_id(op::approve_rejected, query_id)
