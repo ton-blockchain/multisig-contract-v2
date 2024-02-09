@@ -63,8 +63,8 @@ int calculate_order_processing_cost(cell order_body, cell signers, int duration)
     ;; compute_data_size is unpredictable in gas, so we need to measure gas prior to it and after
     ;; and add difference to MULTISIG_INIT_ORDER_GAS
     int initial_gas = gas_consumed();
-    (int order_cells, int order_bits, _) = compute_data_size(order_body, 2048);
-    (int signers_cells, int signers_bits, _) = compute_data_size(signers, 512);
+    (int order_cells, int order_bits, _) = compute_data_size(order_body, 8192); ;; max cells in external message = 8192
+    (int signers_cells, int signers_bits, _) = compute_data_size(signers, 512); ;; max 255 signers in dict, this max cells in dict = 511
     int size_counting_gas = gas_consumed() - initial_gas;
 
     int gas_fees = get_compute_fee(BASECHAIN,MULTISIG_INIT_ORDER_GAS + size_counting_gas) +
