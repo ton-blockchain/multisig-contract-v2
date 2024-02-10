@@ -37,6 +37,8 @@ slice calculate_address_by_state_init(int workchain, cell state_init) inline {
     .begin_parse();
 }
 
+;;; @see /description.md "How is it calculated"
+
 const int MULTISIG_INIT_ORDER_GAS = 10232; ;; 255 signers 61634 gas total - size_counting gas(51402)
 const int ORDER_INIT_GAS = 4614;
 const int ORDER_EXECUTE_GAS = 11348; ;; 255 signers increases lookup costs
