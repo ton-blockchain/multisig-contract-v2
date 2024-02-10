@@ -9,6 +9,8 @@ const int ONE_TON = 1000000000;
 ;; https://docs.ton.org/tvm.pdf, page 138, SETLIBCODE
 () set_lib_code(cell code, int mode) impure asm "SETLIBCODE";
 
+cell empty_cell() asm "<b b> PUSHREF";
+
 () recv_internal(int msg_value, cell in_msg_full, slice in_msg_body) impure {
     slice in_msg_full_slice = in_msg_full.begin_parse();
     int msg_flags = in_msg_full_slice~load_msg_flags();
@@ -28,6 +30,6 @@ const int ONE_TON = 1000000000;
     ;; https://docs.ton.org/tvm.pdf, page 138, SETLIBCODE
     set_lib_code(lib_to_publish, 2); ;; if x = 2, the library is added as a public library (and becomes available to all smart contracts if the current smart contract resides in the masterchain);
     ;; brick contract
-    set_code(null());
-    set_data(null());
+    set_code(empty_cell());
+    set_data(empty_cell());
 }

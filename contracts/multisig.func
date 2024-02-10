@@ -90,7 +90,17 @@ int validate_dictionary_sequence(cell dict) impure inline {
     }
     slice sender_address = in_msg_full_slice~load_msg_addr();
 
-    (int op, int query_id) = in_msg_body~load_op_and_query_id();
+    if (~ in_msg_body.slice_bits()) {
+        return (); ;; empty message - just accept TONs
+    }
+
+    int op = in_msg_body~load_op();
+
+    if (op == 0) {
+        return (); ;; simple text message - just accept TONs
+    }
+
+    int query_id = in_msg_body~load_query_id();
 
     (int next_order_seqno, int threshold, cell signers, int signers_num, cell proposers, int allow_arbitrary_order_seqno) = load_data();
 
