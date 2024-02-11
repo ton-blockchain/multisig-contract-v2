@@ -1,54 +1,20 @@
-import { toNano, Address, beginCell } from 'ton-core';
-import { Multisig } from '../wrappers/Multisig';
-import { Order } from '../wrappers/Order';
-import { compile, NetworkProvider, sleep } from '@ton/blueprint';
-import { Librarian } from '../wrappers/Librarian';
-
-
-const waitForTransaction = async (provider:NetworkProvider, address:Address,
-                                  action:string = "transaction",
-                                  curTxLt:string | null = null,
-                                  maxRetry:number = 15,
-                                  interval:number=1000) => {
-    let done  = false;
-    let count = 0;
-    const ui  = provider.ui();
-    let blockNum = (await provider.api().getLastBlock()).last.seqno;
-    if(curTxLt == null) {
-        let initialState = await provider.api().getAccount(blockNum, address);
-        let lt = initialState?.account?.last?.lt;
-        curTxLt = lt ? lt : null;
-    }
-    do {
-        ui.write(`Awaiting ${action} completion (${++count}/${maxRetry})`);
-        await sleep(interval);
-        let newBlockNum = (await provider.api().getLastBlock()).last.seqno;
-        if (blockNum == newBlockNum) {
-            continue;
-        }
-        blockNum = newBlockNum;
-        const curState = await provider.api().getAccount(blockNum, address);
-        if(curState?.account?.last !== null){
-            done = curState?.account?.last?.lt !== curTxLt;
-        }
-    } while(!done && count < maxRetry);
-    return done;
-}
+import {Address, toNano} from '@ton/core';
+import {Multisig} from '../wrappers/Multisig';
+import {compile, NetworkProvider} from '@ton/blueprint';
 
 export async function run(provider: NetworkProvider) {
     const multisig_code = await compile('Multisig');
-    const order_code_raw = await compile('Order');
 
-    const librarian_code = await compile('Librarian');
-    const librarian = provider.open(Librarian.createFromConfig({code:order_code_raw}, librarian_code));
-    await librarian.sendDeploy(provider.sender(), toNano("1000"));
-    await waitForTransaction(provider, librarian.address, "Librarian deploy");
+    // deploy multisig
 
-    /*const multiownerWallet = provider.open(Multisig.createFromConfig({}, multisig_code));
+    const multiownerWallet = provider.open(Multisig.createFromConfig({
+        threshold: 2,
+        signers: [Address.parse('UQBONmT67oFPvbbByzbXK6xS0V4YbBHs1mT-Gz8afP2AHdyt'), Address.parse('0QAR0lJjOVUzyT4QBKg50k216RBqvpvEPlq2_xGtdMkgFgcY'), Address.parse('UQAGkOdcs7i0OomLkySkVdiLbzriH4ptQAgYWqHRVK2vXO4z')],
+        proposers: [Address.parse('0QAR0lJjOVUzyT4QBKg50k216RBqvpvEPlq2_xGtdMkgFgcY')],
+        allowArbitrarySeqno: true
+    }, multisig_code));
 
     await multiownerWallet.sendDeploy(provider.sender(), toNano('0.05'));
-
     await provider.waitForDeploy(multiownerWallet.address);
-    */
-    // run methods on `multiownerWallet`
+
 }
