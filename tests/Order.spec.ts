@@ -506,6 +506,16 @@ describe('Order', () => {
                                           .storeStringTail("approve").storeRef(
                                               beginCell().storeStringTail(" not given").endCell()
                                           ).endCell(), Errors.order.unknown_op)
+        // Tricky positive case
+        // Empty refs in between comment symbols shouldn't be a problem
+        await testOrderComment(beginCell().storeUint(0, 32)
+                                          .storeStringTail("ap")
+                                          .storeRef(beginCell()
+                                                    .storeRef(
+                                                        beginCell()
+                                                        .storeStringRefTail("prove").endCell()
+                                                    ).endCell())
+                                           .endCell(), 0)
 
         await testOrderComment(beginCell().storeUint(0, 32).storeStringTail("approve not given")
                                                            .endCell(), Errors.order.unknown_op);
