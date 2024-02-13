@@ -480,7 +480,7 @@ describe('Order', () => {
         // Plain approve should succeed
         await testOrderComment(beginCell().storeUint(0, 32)
                                           .storeStringTail(approveStr).endCell(), 0);
-        // Approve in ref should fail
+        // Start wit ref should succeed
         await testOrderComment(beginCell().storeUint(0, 32)
                                           .storeStringRefTail(approveStr).endCell(), 0);
 
