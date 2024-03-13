@@ -18,6 +18,76 @@ int validate_dictionary_sequence(cell dict) impure inline {
     return expected_index;
 }
 
+int is_valid_outgouing_msg(cell msg) impure inline {
+    ;; https://github.com/ton-blockchain/ton/blob/8a9ff339927b22b72819c5125428b70c406da631/crypto/block/block.tlb#L135
+    ;; int_msg_info$0 ihr_disabled:Bool bounce:Bool bounced:Bool
+    ;; src:MsgAddress dest:MsgAddressInt
+    ;; value:CurrencyCollection ihr_fee:Grams fwd_fee:Grams
+    ;; created_lt:uint64 created_at:uint32 = CommonMsgInfoRelaxed;
+
+    ;; https://github.com/ton-blockchain/ton/blob/8a9ff339927b22b72819c5125428b70c406da631/crypto/block/block.tlb#L123C1-L124C33
+    ;; currencies$_ grams:Grams other:ExtraCurrencyCollection = CurrencyCollection;
+
+    ;; https://github.com/ton-blockchain/ton/blob/8a9ff339927b22b72819c5125428b70c406da631/crypto/block/block.tlb#L155
+    ;;
+    ;;message$_ {X:Type} info:CommonMsgInfoRelaxed
+    ;;  init:(Maybe (Either StateInit ^StateInit))
+    ;;  body:(Either X ^X) = MessageRelaxed X;
+
+    slice cs = msg.begin_parse();
+    int msg_flags = cs~load_msg_flags();
+    slice sender_address = cs~load_msg_addr();
+    slice destination_address = cs~load_msg_addr();
+    int value = cs~load_coins();
+    cell extracurrency_collection = cs~load_maybe_ref();
+    int ihr_fee = cs~load_coins();
+    int fwd_fee = cs~load_coins();
+    int created_lt = cs~load_uint(64);
+    int created_at = cs~load_uint(32);
+    int has_state_init = cs~load_bool();
+    if(has_state_init) {
+        int either_state_init = cs~load_bool();
+        if(either_state_init) {
+            cell init_state = cs~load_ref();
+        } else {
+            ;; https://github.com/ton-blockchain/ton/blob/8a9ff339927b22b72819c5125428b70c406da631/crypto/block/block.tlb#L144C1-L146C37
+            ;; _ split_depth:(Maybe (## 5)) special:(Maybe TickTock)
+            ;;  code:(Maybe ^Cell) data:(Maybe ^Cell)
+            ;;  library:(Maybe ^Cell) = StateInit;
+
+            if (cs~load_bool()) { ;;split_depth: Maybe
+                cs~skip_bits(5);
+            }
+            if(cs~load_bool()) { ;;special: Maybe
+                cs~skip_bits(2);
+            }
+            cell code = cs~load_maybe_ref();
+            cell data = cs~load_maybe_ref();
+            cell library = cs~load_maybe_ref();
+        }
+    }
+    int either_body = cs~load_bool();
+    slice body = cs;
+    if (either_body) {
+        body = cs.preload_ref().begin_parse();
+    }
+
+    if(body.slice_bits() < 32) {
+        return true;
+    }
+    int op = body~load_op();
+
+    if (op == op::init) {
+        return false;
+    }
+
+    if (equal_slices_bits(destination_address, my_address()) & (op != op::execute_internal)) {
+        return false;
+    }
+
+    return true;
+}
+
 ((int, cell, int, cell), ()) ~execute_order((int, cell, int, cell) storage, cell order_body) impure inline {
 
     accept_message();
@@ -32,10 +102,11 @@ int validate_dictionary_sequence(cell dict) impure inline {
             int action_op = action~load_op();
             if (action_op == actions::send_message) {
                 int mode = action~load_uint(8);
-                ;; Potentially multisig can init order in this request, but since
-                ;; order will reject second initialisation there is no security issue
-                send_raw_message(action~load_ref(), mode);
+                cell msg = action~load_ref();
                 action.end_parse();
+                throw_unless( error::invalid_out_message, is_valid_outgouing_msg(msg));
+
+                send_raw_message(msg, mode);
             } elseif (action_op == actions::update_multisig_params) {
                 threshold = action~load_index();
                 signers = action~load_nonempty_dict();

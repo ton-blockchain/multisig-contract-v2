@@ -13,6 +13,7 @@ const int error::invalid_threshold = 109;
 const int error::invalid_signers = 110;
 const int error::expired = 111;
 const int error::already_executed = 112;
+const int error::invalid_out_message = 113;
 
 const int error::unknown_op = 0xffff;
 
