@@ -33,7 +33,8 @@ export abstract class Errors {
         already_inited : 105,
         unauthorized_sign : 106,
         expired: 111,
-        already_executed: 112
+        already_executed: 112,
+        invalid_out_message: 113
     }
 };
 
