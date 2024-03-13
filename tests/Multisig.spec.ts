@@ -1,5 +1,5 @@
-import { Blockchain, SandboxContract, TreasuryContract, internal, prettyLogTransactions, BlockchainSnapshot, BlockchainTransaction } from '@ton/sandbox';
-import { beginCell, Cell, toNano, internal as internal_relaxed, Address, SendMode, Dictionary } from '@ton/core';
+import { Blockchain, SandboxContract, TreasuryContract, internal, BlockchainSnapshot, BlockchainTransaction } from '@ton/sandbox';
+import { beginCell, Cell, toNano, internal as internal_relaxed, Address, Dictionary } from '@ton/core';
 import { Action, Multisig, MultisigConfig, TransferRequest, UpdateRequest } from '../wrappers/Multisig';
 import { Order } from '../wrappers/Order';
 import '@ton/test-utils';
@@ -8,6 +8,7 @@ import { randomAddress, findTransactionRequired, findTransaction} from '@ton/tes
 import { Op, Errors, Params } from '../wrappers/Constants';
 import { getRandomInt, differentAddress, Txiterator, executeTill, executeFrom} from './utils';
 import { getMsgPrices, computedGeneric } from '../gasUtils';
+import { MsgGenerator } from '../MsgGenerator';
 
 describe('Multisig', () => {
     let code: Cell;
@@ -883,6 +884,226 @@ describe('Multisig', () => {
             expect(tx.lt).toBeGreaterThan(prevLt); // Check tx order
             prevLt = tx.lt;
         }
+    });
+    describe('Threshold = 0', () => {
+        it.skip('should not deploy with threshold = 0', async () => {
+            let newConfig = {
+                threshold: 0,
+                signers,
+                proposers: [],
+                allowArbitrarySeqno: false,
+            };
+            let stateBefore   = blockchain.snapshot();
+
+            console.log("Creating multisig!");
+            const newMultisig = blockchain.openContract(Multisig.createFromConfig(newConfig, code));
+            const res = await newMultisig.sendDeploy(deployer.getSender(), toNano('1'));
+            try {
+                expect(res.transactions).toHaveTransaction({
+                    on: newMultisig.address,
+                    initData: (x) => {
+                        const ds = x!.beginParse();
+                        console.log("Seqno:", ds.loadUint(256));
+                        const threshold = ds.loadUint(8);
+                        console.log("New threshold:", threshold);
+                        return threshold == 0;
+                    }
+                });
+                expect(res.transactions).toHaveTransaction({
+                    on: newMultisig.address,
+                    from: deployer.address,
+                    oldStatus: 'uninitialized',
+                    aborted: true
+                });
+            }
+            finally {
+                await blockchain.loadFrom(stateBefore);
+            }
+        });
+        it('multisig parameters update with threshold = 0 should fail', async () => {
+            const dataBefore = await multisig.getMultisigData();
+            const orderAddr  = await multisig.getOrderAddress(dataBefore.nextOrderSeqno);
+            expect(dataBefore.threshold).not.toBe(0n);
+
+            const updateReq : UpdateRequest = {
+                'threshold': 0,
+                'type': 'update',
+                'signers': dataBefore.signers,
+                'proposers': dataBefore.proposers
+            }
+
+            const res = await multisig.sendNewOrder(deployer.getSender(), [updateReq, testMsg], curTime() + 1000);
+            expect(res.transactions).toHaveTransaction({
+                on: multisig.address,
+                from: orderAddr,
+                op: Op.multisig.execute,
+                aborted: true
+            });
+            // Make sure that the next action is not executed for whatever reason
+            expect(res.transactions).not.toHaveTransaction({
+                on: testAddr,
+                from: multisig.address
+            });
+            const dataAfter = await multisig.getMultisigData();
+            expect(dataAfter.threshold).toEqual(dataBefore.threshold);
+        });
+    });
+    describe('Order op filter', () => {
+        it('should not allow op::init from orders', async () => {
+            const newSigners = await blockchain.createWallets(4, {balance: toNano('10000000')});
+            const newConfig: MultisigConfig = {
+                threshold: 2,
+                signers: newSigners.map(s => s.address),
+                proposers: [],
+                allowArbitrarySeqno: false
+            }
+
+            const newMultiSig = blockchain.openContract(
+                Multisig.createFromConfig(newConfig, code)
+            )
+            let res = await newMultiSig.sendDeploy(newSigners[0].getSender(), toNano('1000100'));
+            expect(res.transactions).toHaveTransaction({
+                on: newMultiSig.address,
+                deploy: true,
+                aborted: false
+            });
+
+            const dataBefore  = await newMultiSig.getMultisigData();
+            const attacker    = newSigners[0];
+
+            const evilPayload : TransferRequest = {
+                type: "transfer",
+                sendMode: 1,
+                message: internal_relaxed({to: attacker.address, value: toNano('1000000')})
+            }
+
+            const evilOrderAddr = await newMultiSig.getOrderAddress(dataBefore.nextOrderSeqno);
+            const evilOrder     = blockchain.openContract(Order.createFromAddress(evilOrderAddr));
+            const evilPacked    = Multisig.packOrder([evilPayload]);
+
+            // Attacker creates his evil order
+            const attackerExp = curTime() + 2000;
+            res = await newMultiSig.sendNewOrder(attacker.getSender(), [evilPayload], attackerExp);
+            expect(res.transactions).toHaveTransaction({
+                on: evilOrderAddr,
+                from: newMultiSig.address,
+                op: Op.order.init,
+                success: true
+            });
+            expect((await evilOrder.getOrderData()).approvals_num).toBe(1);
+
+            // Here goes seamingly innocent order
+            const innocentPayload: TransferRequest = {
+                type: 'transfer',
+                sendMode: 1,
+                message: internal_relaxed({
+                    to: evilOrderAddr,
+                    value: toNano('0.015'),
+                    // Would approve as signer 3
+                    body: Order.initMessage(newSigners.map(s => s.address), attackerExp, evilPacked, 2, true, 3)
+                })
+            }
+            const simpleOrderAddr = await newMultiSig.getOrderAddress(dataBefore.nextOrderSeqno + 1n);
+            const simpleOrder     = blockchain.openContract(Order.createFromAddress(simpleOrderAddr));
+
+            res = await newMultiSig.sendNewOrder(attacker.getSender(), [innocentPayload], curTime() + 2000);
+            expect(res.transactions).toHaveTransaction({
+                on: simpleOrderAddr,
+                from: newMultiSig.address,
+                op: Op.order.init,
+                deploy: true,
+                success: true
+            });
+            expect((await simpleOrder.getOrderData()).approvals_num).toBe(1);
+            // Now attacker somehow persuaded unsuspecting signer to sign innocent order
+            res = await simpleOrder.sendApprove(newSigners[1].getSender(), 1);
+            expect(res.transactions).toHaveTransaction({
+                on: newMultiSig.address,
+                from: simpleOrder.address,
+                op: Op.multisig.execute
+            });
+            expect(res.transactions).not.toHaveTransaction({
+                on: evilOrderAddr,
+                from: newMultiSig.address,
+                op: Op.order.init
+            });
+            expect(res.transactions).not.toHaveTransaction({
+                on: newMultiSig.address,
+                from: evilOrderAddr,
+                op: Op.multisig.execute
+            });
+        });
+        it.skip('should not allow invalid messages in order', async () => {
+            const msgGenerator = new MsgGenerator(0);
+            for(let badMsg of msgGenerator.generateBadMsg()) {
+                const action: TransferRequest = {
+                    type: 'transfer',
+                    sendMode: 1,
+                    message: internal_relaxed({
+                        to: testAddr,
+                        body: badMsg,
+                        value: toNano('0.015')
+                    })
+                }
+                const res = await multisig.sendNewOrder(deployer.getSender(), [action], curTime() + 1000);
+                expect(res.transactions).toHaveTransaction({
+                    on: multisig.address,
+                    op: Op.multisig.execute,
+                    aborted: true,
+                    success: false,
+                    exitCode: Errors.order.invalid_out_message
+                });
+            }
+        });
+        it('should allow stablecoin minter op-codes', async () => {
+            /*
+             *
+             * const op::mint = 0x642b7d07;
+             * const op::change_admin = 0x6501f354;
+             * const op::claim_admin = 0xfb88e119;
+             * const op::upgrade = 0x2508d66a;
+             * const op::call_to = 0x235caf52;
+             * const op::change_metadata_uri = 0xcb862902;
+             */
+
+            const minter  = await blockchain.treasury('minter_contract');
+            let genMsg = (op: number) : TransferRequest => {
+                return {
+                    type: 'transfer',
+                    sendMode: 1,
+                    message: internal_relaxed({
+                        to: minter.address,
+                        body: beginCell().storeUint(op, 32).storeUint(0, 64).endCell(),
+                        value: toNano('0.015')
+                    })
+                }
+            }
+            const opCodes = [0x642b7d07, 0x6501f354, 0xfb88e119, 0x2508d66a, 0x235caf52, 0xcb862902];
+            const sendActions = opCodes.map(genMsg);
+            const dataBefore  = await multisig.getMultisigData();
+            const minterOrderAddr = await multisig.getOrderAddress(dataBefore.nextOrderSeqno);
+            let   res = await multisig.sendNewOrder(deployer.getSender(), sendActions, curTime() + 1000, toNano('1'));
+            expect(res.transactions).toHaveTransaction({
+                on: minterOrderAddr,
+                from: multisig.address,
+                op: Op.order.init,
+                deploy: true,
+                success: true
+            });
+            expect(res.transactions).toHaveTransaction({
+                on: multisig.address,
+                from: minterOrderAddr,
+                op: Op.multisig.execute,
+                success: true
+            });
+            for(let i = 0; i < opCodes.length; i++) {
+                expect(res.transactions).toHaveTransaction({
+                    from: multisig.address,
+                    to: minter.address,
+                    op: opCodes[i]
+                });
+            }
+        });
     });
     describe('Arbitrary seqno', () => {
         describe('Not allowed', () => {
