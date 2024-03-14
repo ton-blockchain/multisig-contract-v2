@@ -9,7 +9,7 @@ Order in essence is sequential list of one or more actions executed by multisig 
 - `multisig_address` parent multisig address.
 - `order_seqno` sequential number of the order contract.
 - `threshold` number of signatures required to start order execution.
-- `executed?` flag indication whether order has been executed already
+- `sent_for_execution?` flag indication whether order has been executed already
 - `signers` Dictionary containing contract addresses allowed to sign order execution
 - `approvals_mask` Bit field where `true` bit at n-th position indicates approval granted from n-th signer.
 - `approvals_num` Total number of granted approvals.

@@ -104,7 +104,7 @@ export class Order implements Contract {
     async getOrderData(provider: ContractProvider) {
        /*
        (slice multisig, int order_seqno, int threshold,
-                     int executed?, cell signers,
+                     int sent_for_execution?, cell signers,
                      int approvals, int approvals_num, int expiration_date,
                      cell order)
        */
