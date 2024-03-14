@@ -41,8 +41,8 @@ Order life cycle consists of following steps:
 
 ## Execution guarantees
 
-- Order can only be executed once.
-- Order actions are executed sequentially.
+- Order can only be executed once. If execution is unsuccessful (no enough TON on Mutlisig, signer list changes, threshold became higher) Order can not be reused; new Order should be created and approved.
+- Order actions are executed one-by-one sequentially, that means Multisignature contract sends messages in the same order they are specified in Order (note that if destination of messages are in different shards, messages will be delivered asynchronously, possibly in different order).
 - Order can't be executed after it's expiration date.
 - Once approval is granted by signer, it can't be revoked.
 

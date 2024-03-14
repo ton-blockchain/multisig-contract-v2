@@ -17,8 +17,8 @@ This Multisignature wallet was developed keeping in mind [Safe{Wallet}](https://
 ## Guarantees
 
 - Nobody except _proposers_ and _signers_ can initiate creation of new order, nobody except _signers_ can approve new order.
-- Change of the _signers_ set invalidates all orders with old set.
-- _Signer_ compromise, in particularly compromise of less than N _signers_, does not hinder to execute orders or to propose new ones (including orders which will remove compromised _signers_ from the signers list)
+- Change of the _signers_ set invalidates all orders with other set. More strictly, Order is only valid when current _signers_ are equal to _signers_ at the time Order was created.
+- _Signer_ compromise, in particularly compromise of less than _signers.length - N_, does not hinder to execute orders or to propose new ones (including orders which will remove compromised _signers_ from the signers list)
 - _Proposer_ compromise does not hinder to execute orders or to propose new ones (including orders which will remove compromised _proposer_ from the proposers list)
 - Logic of multisignature wallet can not be changed after deploy
 

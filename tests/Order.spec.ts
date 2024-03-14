@@ -427,74 +427,98 @@ describe('Order', () => {
     });
 
     it('should approve order with comment', async () => {
-        let   signerIdx  = 0;
-        let signer     = signers[signerIdx];
-        let dataBefore = await orderContract.getOrderData();
-        expect(dataBefore.inited).toBe(true);
-        let res = await blockchain.sendMessage(internal({
+        let testOrderComment = async (payload: Cell, exp: number) => {
+            const rollBack   = blockchain.snapshot();
+
+            const dataBefore = await orderContract.getOrderData();
+            const rndIdx     = getRandomInt(0, signers.length - 1);
+            const signer     = signers[rndIdx];
+            const expSuccess = exp == 0;
+            expect(Number(dataBefore.approvals_num)).toBe(0);
+
+
+            const res = await blockchain.sendMessage(internal({
                 from: signer.address,
                 to: orderContract.address,
                 value: toNano('1'),
-                body: beginCell().storeUint(0, 32).storeStringTail("approve").endCell()
-        }));
-        expect(res.transactions).toHaveTransaction({
-            from: orderContract.address,
-            to: signer.address,
-            op: Op.order.approved,
-            success: true
-        });
-        let dataAfter  = await orderContract.getOrderData();
+                body: payload
+            }));
 
-        expect(dataAfter.approvals_num).toEqual(dataBefore.approvals_num! + 1);
-        expect(dataAfter._approvals).toBeGreaterThan(dataBefore._approvals!);
-        expect(dataAfter.approvals[signerIdx]).toBe(true);
+            const dataAfter = await orderContract.getOrderData();
 
-        dataBefore = dataAfter;
+            if(expSuccess) {
+                expect(res.transactions).toHaveTransaction({
+                    from: orderContract.address,
+                    to: signer.address,
+                    op: Op.order.approved,
+                    success: expSuccess,
+                    aborted: false,
+                    exitCode: 0
+                });
 
-        // Repeat, but with "tricky comment"
-        signerIdx  = 1;
-        signer     = signers[signerIdx];
+                expect(dataAfter.approvals_num).toEqual(Number(dataBefore.approvals_num) + 1);
+                expect(dataAfter._approvals).toBeGreaterThan(dataBefore._approvals ?? 0n);
+                expect(dataAfter.approvals[rndIdx]).toBe(true);
+            }
+            else {
+                expect(res.transactions).toHaveTransaction({
+                    from: signer.address,
+                    on: orderContract.address,
+                    success: false,
+                    aborted: true,
+                    exitCode: exp
+                });
+                expect(dataAfter.approvals_num).toEqual(dataBefore.approvals_num);
+                expect(dataAfter._approvals).toEqual(dataBefore._approvals);
+                expect(dataAfter.approvals[rndIdx]).toBe(false);
+            }
+            await blockchain.loadFrom(rollBack);
+        };
 
-        res = await blockchain.sendMessage(internal({
-                from: signer.address,
-                to: orderContract.address,
-                value: toNano('1'),
-                body: beginCell().storeUint(0, 32).storeStringTail("approve")
-                          .storeRef(beginCell().storeStringTail(" not given").endCell())
-                          .endCell()
-        }));
+        let approveStr = "approve";
 
-        expect(res.transactions).toHaveTransaction({
-            from: signer.address,
-            to: orderContract.address,
-            success: false
-        });
-        dataAfter  = await orderContract.getOrderData();
+        // Plain approve should succeed
+        await testOrderComment(beginCell().storeUint(0, 32)
+                                          .storeStringTail(approveStr).endCell(), 0);
+        // Start wit ref should succeed
+        await testOrderComment(beginCell().storeUint(0, 32)
+                                          .storeStringRefTail(approveStr).endCell(), 0);
 
-        // All should stay same
-        expect(dataAfter.approvals_num).toEqual(dataBefore.approvals_num);
-        expect(dataAfter._approvals).toEqual(dataBefore._approvals);
+        // Each letter in separate ref
+        let joinedStr: Cell | undefined;
+        let lettersLeft = approveStr.length - 1;
 
-        // Repeat, but with other "tricky comment"
-        signerIdx  = 1;
-        signer     = signers[signerIdx];
-        res = await blockchain.sendMessage(internal({
-                from: signer.address,
-                to: orderContract.address,
-                value: toNano('1'),
-                body: beginCell().storeUint(0, 32).storeStringTail("approve not given").endCell()
-        }));
+        do {
+            const chunk = beginCell().storeStringTail(approveStr[lettersLeft]);
+            if(joinedStr == undefined) {
+                joinedStr = chunk.endCell();
+            }
+            else {
+                joinedStr = chunk.storeRef(joinedStr).endCell();
+            }
+        } while(lettersLeft--);
 
-        expect(res.transactions).toHaveTransaction({
-            from: signer.address,
-            to: orderContract.address,
-            success: false
-        });
-        dataAfter  = await orderContract.getOrderData();
+        expect(joinedStr.depth()).toEqual(approveStr.length - 1);
+        await testOrderComment(beginCell().storeUint(0, 32)
+                                          .storeSlice(joinedStr.beginParse()).endCell(), 0);
+        // Tricky comment
+        await testOrderComment(beginCell().storeUint(0, 32)
+                                          .storeStringTail("approve").storeRef(
+                                              beginCell().storeStringTail(" not given").endCell()
+                                          ).endCell(), Errors.order.unknown_op)
+        // Tricky positive case
+        // Empty refs in between comment symbols shouldn't be a problem
+        await testOrderComment(beginCell().storeUint(0, 32)
+                                          .storeStringTail("ap")
+                                          .storeRef(beginCell()
+                                                    .storeRef(
+                                                        beginCell()
+                                                        .storeStringRefTail("prove").endCell()
+                                                    ).endCell())
+                                           .endCell(), 0)
 
-        // All should stay same
-        expect(dataAfter.approvals_num).toEqual(dataBefore.approvals_num);
-        expect(dataAfter._approvals).toEqual(dataBefore._approvals);
+        await testOrderComment(beginCell().storeUint(0, 32).storeStringTail("approve not given")
+                                                           .endCell(), Errors.order.unknown_op);
     });
 
 
