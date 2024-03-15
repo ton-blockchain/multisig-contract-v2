@@ -118,7 +118,7 @@ slice get_text_comment(slice in_msg_body) impure inline {
             .store_index(approvals_num)
             .store_hash(signers.cell_hash())
             .store_ref(order),
-            BOUNCEABLE,
+            NON_BOUNCEABLE,
             SEND_MODE_CARRY_ALL_BALANCE | SEND_MODE_BOUNCE_ON_ACTION_FAIL
         );
         sent_for_execution? = true;
@@ -127,7 +127,6 @@ slice get_text_comment(slice in_msg_body) impure inline {
 
 () approve(int signer_index, slice response_address, int query_id) impure inline_ref {
     try {
-        throw_if(error::expired, now() > expiration_date);
         throw_if(error::already_executed, sent_for_execution?);
 
         add_approval(signer_index);
@@ -196,7 +195,7 @@ slice get_text_comment(slice in_msg_body) impure inline {
             approvals_mask = 0;
             approvals_num = 0;
             expiration_date = in_msg_body~load_timestamp();
-            throw_unless(error::expired, expiration_date >= now());
+            throw_unless(error::expired, expiration_date >= now()); ;; in case of error TONs will bounce back to multisig
             order = in_msg_body~load_ref();
 
             int approve_on_init? = in_msg_body~load_bool();
