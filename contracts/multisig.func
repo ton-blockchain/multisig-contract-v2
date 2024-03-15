@@ -18,7 +18,7 @@ int validate_dictionary_sequence(cell dict) impure inline {
     return expected_index;
 }
 
-int is_valid_outgouing_msg(cell msg) impure inline {
+int is_valid_outgoing_message(cell msg) impure inline {
     ;; https://github.com/ton-blockchain/ton/blob/8a9ff339927b22b72819c5125428b70c406da631/crypto/block/block.tlb#L135
     ;; int_msg_info$0 ihr_disabled:Bool bounce:Bool bounced:Bool
     ;; src:MsgAddress dest:MsgAddressInt
@@ -104,7 +104,7 @@ int is_valid_outgouing_msg(cell msg) impure inline {
                 int mode = action~load_uint(8);
                 cell msg = action~load_ref();
                 action.end_parse();
-                throw_unless( error::invalid_out_message, is_valid_outgouing_msg(msg));
+                throw_unless( error::invalid_out_message, is_valid_outgoing_message(msg));
 
                 send_raw_message(msg, mode);
             } elseif (action_op == actions::update_multisig_params) {
