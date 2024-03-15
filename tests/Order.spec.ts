@@ -615,42 +615,6 @@ describe('Order', () => {
             signerIdx = ++signerIdx % signersNum;
         }
     });
-
-    it('should reject execution when expired', async () => {
-        const msgVal     = toNano('0.1');
-        const queryId    = BigInt(getRandomInt(1000, 2000));
-        for (let i = 0; i < threshold - 1; i++) {
-            const res = await orderContract.sendApprove(signers[i].getSender(), i, msgVal, queryId);
-            testApprove(res.transactions, signers[i].address, orderContract.address, 0);
-        }
-
-        let dataAfter = await orderContract.getOrderData();
-        expect(dataAfter.inited).toBe(true);
-        expect(dataAfter.approvals_num).toBe(4);
-
-        // Now last one is late
-
-        blockchain.now = Number(dataAfter.expiration_date! + 1n);
-
-        // Pick at random
-        const signerIdx  = getRandomInt(threshold - 1, signers.length - 1);
-        const lastSigner = signers[signerIdx];
-        const msgValue   = toNano('1');
-        const balanceBefore = (await blockchain.getContract(orderContract.address)).balance;
-        const res = await orderContract.sendApprove(lastSigner.getSender(), signerIdx, msgValue, queryId);
-
-        testApprove(res.transactions, lastSigner.address, orderContract.address, Errors.order.expired);
-        expect(res.transactions).not.toHaveTransaction({
-            from: orderContract.address,
-            to: multisig.address,
-            op: Op.multisig.execute,
-        });
-
-        dataAfter = await orderContract.getOrderData();
-
-        expect(dataAfter.approvals_num).toEqual(threshold - 1);
-        expect(dataAfter.executed).toBe(false);
-    });
     it('should reject execution when executed once', async () => {
         const msgVal = toNano('1');
         for (let i = 0; i < threshold; i++) {

@@ -257,6 +257,9 @@ int is_valid_outgoing_message(cell msg) impure inline {
     (int next_order_seqno, int threshold, cell signers, int signers_num, cell proposers, int allow_arbitrary_order_seqno) = load_data();
     throw_unless(error::inconsistent_data, signers_num == validate_dictionary_sequence(signers));
     validate_dictionary_sequence(proposers);
+    throw_unless(error::invalid_signers, signers_num >= 1);
+    throw_unless(error::invalid_threshold, threshold > 0);
+    throw_unless(error::invalid_threshold, threshold <= signers_num);
     return (allow_arbitrary_order_seqno ? -1 : next_order_seqno, threshold, signers, proposers);
 }
 

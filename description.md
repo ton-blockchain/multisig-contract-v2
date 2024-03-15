@@ -9,7 +9,7 @@ Order in essence is sequential list of one or more actions executed by multisig 
 - `multisig_address` parent multisig address.
 - `order_seqno` sequential number of the order contract.
 - `threshold` number of signatures required to start order execution.
-- `executed?` flag indication whether order has been executed already
+- `sent_for_execution?` flag indication whether order has been executed already
 - `signers` Dictionary containing contract addresses allowed to sign order execution
 - `approvals_mask` Bit field where `true` bit at n-th position indicates approval granted from n-th signer.
 - `approvals_num` Total number of granted approvals.
@@ -41,8 +41,8 @@ Order life cycle consists of following steps:
 
 ## Execution guarantees
 
-- Order can only be executed once.
-- Order actions are executed sequentially.
+- Order can only be executed once. If execution is unsuccessful (no enough TON on Mutlisig, signer list changes, threshold became higher) Order can not be reused; new Order should be created and approved.
+- Order actions are executed one-by-one sequentially, that means Multisignature contract sends messages in the same order they are specified in Order (note that if destination of messages are in different shards, messages will be delivered asynchronously, possibly in different order).
 - Order can't be executed after it's expiration date.
 - Once approval is granted by signer, it can't be revoked.
 
@@ -62,7 +62,6 @@ Rest of the order state parameters are passed in a message body.
 
 ## Order approval
 
-Order approvals only accepted till the order `expiration_date`.  
 Order approval may be granted either by [initialization](https://github.com/ton-blockchain/multisig-contract-v2/blob/master/contracts/multisig.tlb#L74) or [approve](https://github.com/ton-blockchain/multisig-contract-v2/blob/master/contracts/multisig.tlb#L82) message.
 
 `signer_index` field indicates index in `signers` dictionary to check sender address against.

@@ -9,7 +9,7 @@
 global slice multisig_address;
 global int order_seqno;
 global int threshold;
-global int executed?;
+global int sent_for_execution?;
 global cell signers;
 global int approvals_mask;
 global int approvals_num;
@@ -24,7 +24,7 @@ global cell order;
     if (ds.slice_bits() == 0) {
         ;; not initialized yet
         threshold = null();
-        executed? = null();
+        sent_for_execution? = null();
         signers = null();
         approvals_mask = null();
         approvals_num = null();
@@ -32,7 +32,7 @@ global cell order;
         order = null();
     } else {
         threshold = ds~load_index();
-        executed? = ds~load_bool();
+        sent_for_execution? = ds~load_bool();
         signers = ds~load_nonempty_dict();
         approvals_mask = ds~load_uint(MASK_SIZE);
         approvals_num = ds~load_index();
@@ -48,7 +48,7 @@ global cell order;
         .store_slice(multisig_address)
         .store_order_seqno(order_seqno)
         .store_index(threshold)
-        .store_bool(executed?)
+        .store_bool(sent_for_execution?)
         .store_nonempty_dict(signers)
         .store_uint(approvals_mask, MASK_SIZE)
         .store_index(approvals_num)
@@ -118,17 +118,16 @@ slice get_text_comment(slice in_msg_body) impure inline {
             .store_index(approvals_num)
             .store_hash(signers.cell_hash())
             .store_ref(order),
-            BOUNCEABLE,
+            NON_BOUNCEABLE,
             SEND_MODE_CARRY_ALL_BALANCE | SEND_MODE_BOUNCE_ON_ACTION_FAIL
         );
-        executed? = true;
+        sent_for_execution? = true;
     }
 }
 
 () approve(int signer_index, slice response_address, int query_id) impure inline_ref {
     try {
-        throw_if(error::expired, now() > expiration_date);
-        throw_if(error::already_executed, executed?);
+        throw_if(error::already_executed, sent_for_execution?);
 
         add_approval(signer_index);
 
@@ -191,12 +190,12 @@ slice get_text_comment(slice in_msg_body) impure inline {
         if (null?(threshold)) {
             ;; Let's init
             threshold = in_msg_body~load_index();
-            executed? = false;
+            sent_for_execution? = false;
             signers = in_msg_body~load_nonempty_dict();
             approvals_mask = 0;
             approvals_num = 0;
             expiration_date = in_msg_body~load_timestamp();
-            throw_unless(error::expired, expiration_date >= now());
+            throw_unless(error::expired, expiration_date >= now()); ;; in case of error TONs will bounce back to multisig
             order = in_msg_body~load_ref();
 
             int approve_on_init? = in_msg_body~load_bool();
@@ -249,7 +248,7 @@ _ get_order_data() method_id {
         multisig_address,
         order_seqno,
         threshold,
-        executed?,
+        sent_for_execution?,
         signers,
         approvals_mask,
         approvals_num,
