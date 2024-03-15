@@ -41,8 +41,8 @@ slice calculate_address_by_state_init(int workchain, cell state_init) inline {
 
 const int MULTISIG_INIT_ORDER_GAS = 10232; ;; 255 signers 61634 gas total - size_counting gas(51402)
 const int ORDER_INIT_GAS = 4614;
-const int ORDER_EXECUTE_GAS = 11348; ;; 255 signers increases lookup costs
-const int MULTISIG_EXECUTE_GAS = 7486; ;; For single transfer action order
+const int ORDER_EXECUTE_GAS = 11244; ;; 255 signers increases lookup costs
+const int MULTISIG_EXECUTE_GAS = 7576; ;; For single transfer action order
 ;; we call number of bits/cells without order bits/cells as "overhead"
 const int INIT_ORDER_BIT_OVERHEAD = 1337;
 const int INIT_ORDER_CELL_OVERHEAD = 6;
