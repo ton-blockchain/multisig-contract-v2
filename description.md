@@ -62,7 +62,6 @@ Rest of the order state parameters are passed in a message body.
 
 ## Order approval
 
-Order approvals only accepted till the order `expiration_date`.  
 Order approval may be granted either by [initialization](https://github.com/ton-blockchain/multisig-contract-v2/blob/master/contracts/multisig.tlb#L74) or [approve](https://github.com/ton-blockchain/multisig-contract-v2/blob/master/contracts/multisig.tlb#L82) message.
 
 `signer_index` field indicates index in `signers` dictionary to check sender address against.
