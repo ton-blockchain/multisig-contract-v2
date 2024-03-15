@@ -884,6 +884,69 @@ describe('Multisig', () => {
             prevLt = tx.lt;
         }
     });
+    describe('Threshold = 0', () => {
+        it.skip('should not deploy with threshold = 0', async () => {
+            let newConfig = {
+                threshold: 0,
+                signers,
+                proposers: [],
+                allowArbitrarySeqno: false,
+            };
+            let stateBefore   = blockchain.snapshot();
+
+            console.log("Creating multisig!");
+            const newMultisig = blockchain.openContract(Multisig.createFromConfig(newConfig, code));
+            const res = await newMultisig.sendDeploy(deployer.getSender(), toNano('1'));
+            try {
+                expect(res.transactions).toHaveTransaction({
+                    on: newMultisig.address,
+                    initData: (x) => {
+                        const ds = x!.beginParse();
+                        console.log("Seqno:", ds.loadUint(256));
+                        const threshold = ds.loadUint(8);
+                        console.log("New threshold:", threshold);
+                        return threshold == 0;
+                    }
+                });
+                expect(res.transactions).toHaveTransaction({
+                    on: newMultisig.address,
+                    from: deployer.address,
+                    oldStatus: 'uninitialized',
+                    aborted: true
+                });
+            }
+            finally {
+                await blockchain.loadFrom(stateBefore);
+            }
+        });
+        it('multisig parameters update with threshold = 0 should fail', async () => {
+            const dataBefore = await multisig.getMultisigData();
+            const orderAddr  = await multisig.getOrderAddress(dataBefore.nextOrderSeqno);
+            expect(dataBefore.threshold).not.toBe(0n);
+
+            const updateReq : UpdateRequest = {
+                'threshold': 0,
+                'type': 'update',
+                'signers': dataBefore.signers,
+                'proposers': dataBefore.proposers
+            }
+
+            const res = await multisig.sendNewOrder(deployer.getSender(), [updateReq, testMsg], curTime() + 1000);
+            expect(res.transactions).toHaveTransaction({
+                on: multisig.address,
+                from: orderAddr,
+                op: Op.multisig.execute,
+                aborted: true
+            });
+            // Make sure that the next action is not executed for whatever reason
+            expect(res.transactions).not.toHaveTransaction({
+                on: testAddr,
+                from: multisig.address
+            });
+            const dataAfter = await multisig.getMultisigData();
+            expect(dataAfter.threshold).toEqual(dataBefore.threshold);
+        });
+    });
     describe('Arbitrary seqno', () => {
         describe('Not allowed', () => {
         it('should not allow to create order with seqno other then next order seqno', async () => {
