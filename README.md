@@ -2,7 +2,13 @@
 
 This set of contracts provide "N-of-M multisig" functionality: at least N parties out of predefined set of M _signers_ must approve **Order** to execute it.
 
-Each **Order** may contain arbitrary number of actions: outcoming messages and updates of parameters. Since content of the messages is arbitrary **Order** may execute arbitrary high-level interactions on TON: sending TONs, sending/minting jettons, execute administrative duty, etc.
+Each **Order** may contain arbitrary number of actions: outgoing messages and updates of parameters. Since content of the messages is arbitrary **Order** may execute arbitrary high-level interactions on TON: sending TONs, sending/minting jettons, execute administrative duty, etc.
+
+> ⚠️ Multisig does not limit the content of Order actions, so Order can include absolutely any actions, including those that create new multisig orders or approve existing multisg orders or change multisig configuration (e.g. a list of signers).
+>
+> UI and other tools for working with multisig must fully parse the contents of orders and clearly report all actions that will be performed by the order. Such tools should also explicitly report parsing errors or actions of an unknown type.
+>
+> Singers must approve order only after fully reading order contents.
 
 Parameters, such as threshold N, list of _signers_ and other can only be updated by consensus of current N-of-M owners.
 
