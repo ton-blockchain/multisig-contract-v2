@@ -32,8 +32,6 @@ int validate_dictionary_sequence(cell dict) impure inline {
             int action_op = action~load_op();
             if (action_op == actions::send_message) {
                 int mode = action~load_uint(8);
-                ;; Potentially multisig can init order in this request, but since
-                ;; order will reject second initialisation there is no security issue
                 send_raw_message(action~load_ref(), mode);
                 action.end_parse();
             } elseif (action_op == actions::update_multisig_params) {
