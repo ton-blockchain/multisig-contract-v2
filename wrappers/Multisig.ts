@@ -39,7 +39,7 @@ function moduleArrayToCell(arr: Array<Module>) {
     return dict;
 }
 
-function cellToArray(addrDict: Cell | null) : Array<Address>  {
+export function cellToArray(addrDict: Cell | null) : Array<Address>  {
     let resArr: Array<Address> = [];
     if(addrDict !== null) {
         const dict = Dictionary.loadDirect(Dictionary.Keys.Uint(8), Dictionary.Values.Address(), addrDict);
@@ -245,6 +245,16 @@ export class Multisig implements Contract {
             body: Multisig.newOrderMessage(newActions, expirationDate, isSigner, addrIdx, seqno)
         });
         //console.log(await provider.get("get_order_address", []));
+    }
+    async sendNewOrderStrict(provider: ContractProvider, via: Sender,
+           actions: Cell,
+           expirationDate: number, value: bigint, addrIdx: number, isSigner: boolean, seqno: bigint) {
+
+        await provider.internal(via, {
+            sendMode: SendMode.PAY_GAS_SEPARATELY,
+            value,
+            body: Multisig.newOrderMessage(actions, expirationDate, isSigner, addrIdx, seqno)
+        });
     }
 
     async getOrderAddress(provider: ContractProvider, orderSeqno: bigint) {
