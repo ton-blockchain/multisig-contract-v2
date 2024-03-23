@@ -1,63 +1,82 @@
-import {Address, beginCell, toNano} from '@ton/core';
+import {beginCell, SendMode, toNano} from '@ton/core';
 import {Multisig} from '../wrappers/Multisig';
 import {compile, NetworkProvider} from '@ton/blueprint';
+import {promptBigInt, promptCell, promptToncoin, promptUserFriendlyAddress} from "../wrappers/ui-utils";
+import {checkMultisig} from "./MultisigChecker";
 
 export async function run(provider: NetworkProvider) {
-    const multisig_code = await compile('Multisig');
+    if (!provider.sender().address) {
+        throw new Error('no sender address');
+    }
 
-    // deploy multisig
+    const isTestnet = provider.network() !== 'mainnet';
 
-    const multiownerWallet = provider.open(Multisig.createFromConfig({
-        threshold: 2,
-        signers: [Address.parse('UQBONmT67oFPvbbByzbXK6xS0V4YbBHs1mT-Gz8afP2AHdyt'), Address.parse('0QAR0lJjOVUzyT4QBKg50k216RBqvpvEPlq2_xGtdMkgFgcY'), Address.parse('UQAGkOdcs7i0OomLkySkVdiLbzriH4ptQAgYWqHRVK2vXO4z')],
-        proposers: [Address.parse('0QAR0lJjOVUzyT4QBKg50k216RBqvpvEPlq2_xGtdMkgFgcY')],
-        allowArbitrarySeqno: true
-    }, multisig_code));
+    const ui = provider.ui();
 
-    // create new order
+    const multisigCode = await compile('Multisig');
 
-    const masterMsg = beginCell()
-        .storeUint(0x178d4519, 32) // internal_transfer
-        .storeUint(0, 64) // query_id
-        .storeCoins(5000000000n) // jetton amount
-        .storeAddress(Address.parse('0QAR0lJjOVUzyT4QBKg50k216RBqvpvEPlq2_xGtdMkgFgcY')) // from address (will be ignored)
-        .storeAddress(Address.parse('0QAR0lJjOVUzyT4QBKg50k216RBqvpvEPlq2_xGtdMkgFgcY')) // response address
-        .storeCoins(0) // forward payload
-        .storeBit(false) // no forward
-        .endCell();
+    const multisigAddress = await promptUserFriendlyAddress('Enter multisig address', ui, isTestnet);
 
-    await multiownerWallet.sendNewOrder(provider.sender(), [{
-        type: 'transfer',
-        sendMode: 3,
-        message: {
-            info: {
-                type: 'internal',
-                ihrDisabled: false,
-                bounce: true,
-                bounced: false,
-                dest: Address.parse('EQAZym3GBvem-frRGy1gUIaO-IBb5ByJPrm8aXtN7a_6PBW6'), // jetton-minter
-                value: {
-                    coins: toNano('1') // ton amount
-                },
-                ihrFee: 0n,
-                forwardFee: 0n,
-                createdLt: 0n,
-                createdAt: 0
-            },
-            body: beginCell()
-                .storeUint(0x642b7d07, 32) // mint
-                .storeUint(0, 64) // query_id
-                .storeAddress(Address.parse('0QAR0lJjOVUzyT4QBKg50k216RBqvpvEPlq2_xGtdMkgFgcY')) // mint to this regular wallet
-                .storeCoins(toNano('0.5')) // ton amount
-                .storeRef(masterMsg)
-                .endCell()
+    try {
+        const {
+            multisigContract,
+            signers,
+            proposers
+        } = await checkMultisig(multisigAddress, multisigCode, provider, ui, isTestnet, false);
+
+        const myProposerIndex = proposers.findIndex(address => address.equals(provider.sender().address!));
+        const mySignerIndex = signers.findIndex(address => address.equals(provider.sender().address!));
+
+        if (myProposerIndex === -1 && mySignerIndex === -1) {
+            ui.write('Error: you are not proposer and not signer');
+            return;
         }
-    }],
-        Math.floor(Date.now() / 1000 + 3600), // expired in hour
-        toNano('1'), // ton amount
-        0, // index
-        false, // not signer
-        123n // order_seqno
-    );
 
+        const isSigner = mySignerIndex > -1;
+
+        const orderId = await promptBigInt("Please enter orderId", ui);
+
+        const destinationAddress = await promptUserFriendlyAddress("Enter destination", ui, isTestnet);
+        const tonAmount = await promptToncoin("Enter TON amount to send from multisig to destination", ui);
+        const payloadCell = await promptCell("Enter payload in base64 cell to send from multisig to destination (empty if no payload)", ui);
+
+        const expireAt = Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 30; // 1 month
+
+        await multisigContract.sendNewOrderStrict(
+            provider.sender(),
+            Multisig.packOrder([
+                {
+                    type: 'transfer',
+                    sendMode: SendMode.PAY_GAS_SEPARATELY,
+                    message: {
+                        info: {
+                            type: 'internal',
+                            ihrDisabled: false,
+                            bounce: true,
+                            bounced: false,
+                            dest: destinationAddress.address,
+                            value: {
+                                coins: tonAmount
+                            },
+                            ihrFee: 0n,
+                            forwardFee: 0n,
+                            createdLt: 0n,
+                            createdAt: 0
+                        },
+                        body: payloadCell || beginCell().endCell()
+                    }
+                }
+            ]),
+            expireAt,
+            toNano('1'), // 1 TON
+            isSigner ? mySignerIndex : myProposerIndex, // index
+            isSigner, // not signer
+            orderId // order_seqno
+        );
+
+
+    } catch (e: any) {
+        ui.write(e.message);
+        return;
+    }
 }

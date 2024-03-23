@@ -59,6 +59,21 @@ export const promptAmount = async (prompt: string, decimals: number, provider: U
     } while (true);
 }
 
+export const promptCell = async (prompt: string, provider: UIProvider): Promise<Cell | null> => {
+    do {
+        const inputAmount = await provider.input(prompt);
+        if (inputAmount == '') {
+            return null;
+        }
+        try {
+            const cell = Cell.fromBase64(inputAmount);
+            return cell;
+        } catch (e: any) {
+            provider.write('Invalid cell');
+        }
+    } while (true);
+}
+
 export const promptInt = async (prompt:string, provider:UIProvider, min?: number, max?: number) => {
     let resAmount:number;
     do {
