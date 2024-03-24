@@ -1,9 +1,10 @@
 import { Address, beginCell,  Cell, Builder, BitString, Dictionary, Contract, contractAddress, ContractProvider, Sender, SendMode, toNano } from '@ton/core';
 import { Op, Params } from "./Constants";
+import {endParse} from "./Multisig";
 
 export type OrderConfig = {
     multisig: Address,
-    orderSeqno: number
+    orderSeqno: bigint
 };
 
 function arrayToCell(arr: Array<Address>): Dictionary<number, Address> {
@@ -28,6 +29,33 @@ export function orderConfigToCell(config: OrderConfig): Cell {
                 .storeAddress(config.multisig)
                 .storeUint(config.orderSeqno, Params.bitsize.orderSeqno)
            .endCell();
+}
+
+export function parseOrderData(data: Cell) {
+    const slice = data.beginParse();
+    const multisigAddress = slice.loadAddress();
+    const orderSeqno = slice.loadUintBig(256);
+
+    const threshold = slice.loadUint(8);
+    const isExecuted = slice.loadBoolean();
+    const signers = cellToArray(slice.loadRef());
+    const approvalsMask = slice.loadUint(1 << 8);
+    const approvalsNum = slice.loadUint(8);
+    const expirationDate = slice.loadUint(48);
+    const order = slice.loadRef();
+    endParse(slice);
+
+    return {
+        multisigAddress,
+        orderSeqno,
+        threshold,
+        isExecuted,
+        signers,
+        approvalsMask,
+        approvalsNum,
+        expirationDate,
+        order
+    }
 }
 
 export class Order implements Contract {

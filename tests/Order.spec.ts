@@ -53,7 +53,7 @@ describe('Order', () => {
 
         orderContract = blockchain.openContract(Order.createFromConfig({
             multisig: multisig.address,
-            orderSeqno: 0
+            orderSeqno: 0n
         }, code));
 
         prices = getMsgPrices(blockchain.config, 0);
@@ -182,7 +182,7 @@ describe('Order', () => {
 
         const newOrder = blockchain.openContract(Order.createFromConfig({
             multisig: multisig.address,
-            orderSeqno: 1234 // Next
+            orderSeqno: 1234n // Next
         }, code));
 
         const expDate =  blockchain.now! + 1000;
@@ -218,7 +218,7 @@ describe('Order', () => {
     it('should reject already expired init message', async () => {
         const newOrder = blockchain.openContract(Order.createFromConfig({
             multisig: multisig.address,
-            orderSeqno: 123 // Next
+            orderSeqno: 123n // Next
         }, code));
         const expDate = blockchain.now! - 1;
 
@@ -677,7 +677,7 @@ describe('Order', () => {
         const jumboSigners = await blockchain.createWallets(255);
         const jumboOrder   = blockchain.openContract(Order.createFromConfig({
             multisig: multisig.address,
-            orderSeqno: 1
+            orderSeqno: 1n
         }, code));
 
         let res = await jumboOrder.sendDeploy(multisig.getSender(), toNano('1'), jumboSigners.map(s => s.address), blockchain.now! + 1000, mockOrder, jumboSigners.length);
