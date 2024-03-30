@@ -46,6 +46,10 @@ Order life cycle consists of following steps:
 - Order can't be executed after it's expiration date.
 - Once approval is granted by signer, it can't be revoked.
 
+Note that in guarantees above Order means the totality of all parameters, in particular order id, list of order actions, creation and expiration dates, list of approvals, etc.
+It is possible to create two different Orders which share some parameters (for instance list of actions), however such orders will be independent and require separate approvals to be executed.
+Also, after Order execution, it's contract on-chain is no longer used. Given rental mechanism of TON blockchain that means that after some time (usually years) this contract will be removed from blockchain. After that, if Multisig operates in `allow_arbitrary_order_seqno` mode, a new Order with the same order_id can be created. Same as in the case above, two Orders that share order_id will be completely independent, can contain different list of actions and will require separate approvals (besides being separated in time by years)
+
 ### The order actions on the multisig are performed by the balance of the multisig
 
 Make sure you have enough balance on your multisig.
