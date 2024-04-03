@@ -16,7 +16,7 @@ Any _signer_ may propose new **Order**. Multisignature wallet also allows to ass
 
 Each **Order** has expiration date after which it can not be executed.
 
-Each _signer_ may be wallet, hard-ware wallet, multisig themselves as well as other smart-contracts with its own logic.
+Each _signer_ may be wallet, hardware wallet, multisig themselves as well as other smart-contracts with its own logic.
 
 This Multisignature wallet was developed keeping in mind [Safe{Wallet}](https://app.safe.global/welcome).
 
@@ -77,4 +77,15 @@ use Toncenter API:
 
 API_KEY can be obtained on https://toncenter.com or https://testnet.toncenter.com
 
+
+## Notes:
+
+- Threshold must be > 0 and <= signers_num.
+
+- By design orders smart contract are not notified of multisig configuration update (signer, proposers, threshold).
+   Such an order will continue to accept approvals, but when executed, it will be rejected because the multisig configuration has changed.
+
+- TON balance of an expired order can be returned to multisig. To do this, the order must collect enough approvals - it will be sent for execution, there will be no execution, but the TONs will be returned to the multisig.
+
+- `approve_accepted` auxiliary notification is not sent if the order is initialized and executed immediately (approve_on_init with threshold = 1).
 
