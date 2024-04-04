@@ -117,12 +117,12 @@ int validate_dictionary_sequence(cell dict) impure inline {
         int signer? = in_msg_body~load_bool();
         int index = in_msg_body~load_index();
         int expiration_date = in_msg_body~load_timestamp();
+        throw_unless(error::expired, expiration_date >= now());
         cell order_body = in_msg_body~load_ref();
         in_msg_body.end_parse();
         (slice expected_address, int found?) = (signer? ? signers : proposers).udict_get?(INDEX_SIZE, index);
         throw_unless(error::unauthorized_new_order, found?);
         throw_unless(error::unauthorized_new_order, equal_slices_bits(sender_address, expected_address));
-        throw_unless(error::expired, expiration_date >= now());
 
         int minimal_value = calculate_order_processing_cost(order_body, signers, expiration_date - now());
         throw_unless(error::not_enough_ton, msg_value >= minimal_value);
@@ -154,6 +154,7 @@ int validate_dictionary_sequence(cell dict) impure inline {
 
         int order_seqno = in_msg_body~load_order_seqno();
         int expiration_date = in_msg_body~load_timestamp();
+        throw_unless(error::expired, expiration_date >= now());
         int approvals_num = in_msg_body~load_index();
         int signers_hash = in_msg_body~load_hash();
         cell order_body = in_msg_body~load_ref();
@@ -164,7 +165,6 @@ int validate_dictionary_sequence(cell dict) impure inline {
 
         throw_unless(error::unauthorized_execute, equal_slices_bits(sender_address, order_address));
         throw_unless(error::singers_outdated, (signers_hash == signers.cell_hash()) & (approvals_num >= threshold));
-        throw_unless(error::expired, expiration_date >= now());
 
         (threshold, signers, signers_num, proposers)~execute_order(order_body);
     } elseif (op == op::execute_internal) {
