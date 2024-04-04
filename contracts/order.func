@@ -86,7 +86,7 @@ slice get_text_comment(slice in_msg_body) impure inline {
 
 (int, int) find_signer_by_address(slice signer_address) impure inline {
     int found_signer? = false;
-    int signer_index = -1;
+    int signer_index = true;
     do {
         (signer_index, slice value, int next_found?) = signers.udict_get_next?(INDEX_SIZE, signer_index);
         if (next_found?) {
