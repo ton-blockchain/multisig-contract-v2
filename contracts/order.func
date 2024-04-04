@@ -149,7 +149,7 @@ slice get_text_comment(slice in_msg_body) impure inline {
             0,
             begin_cell()
             .store_op_and_query_id(op::approve_rejected, query_id)
-            .store_uint(exit_code, 32),
+            .store_uint(exit_code.cast_to_int(), 32),
             NON_BOUNCEABLE,
             SEND_MODE_CARRY_ALL_REMAINING_MESSAGE_VALUE | SEND_MODE_BOUNCE_ON_ACTION_FAIL
         );
