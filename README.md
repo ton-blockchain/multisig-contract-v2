@@ -10,6 +10,8 @@ Each **Order** may contain arbitrary number of actions: outgoing messages and up
 >
 > Singers must approve order only after fully reading order contents.
 
+> ⚠️ The multisig UI should display all created and unexecuted orders (these can be found in outgoing messages from multisig), as well as the match of their list of signers with the current list of singers of multisig, so that users clearly see all active orders that can be executed.
+
 Parameters, such as threshold N, list of _signers_ and other can only be updated by consensus of current N-of-M owners.
 
 Any _signer_ may propose new **Order**. Multisignature wallet also allows to assign _proposer_ role: _proposer_ may suggest new Orders but can not approve them.
@@ -23,7 +25,7 @@ This Multisignature wallet was developed keeping in mind [Safe{Wallet}](https://
 ## Guarantees
 
 - Nobody except _proposers_ and _signers_ can initiate creation of new order, nobody except _signers_ can approve new order.
-- Change of the _signers_ set invalidates all orders with other set. More strictly, Order is only valid when current _signers_ are equal to _signers_ at the time Order was created.
+- Change of the _signers_ set invalidates all orders with other set. More strictly, Order is only valid when current _signers_ of the Multisig are equal to _signers_ of the Order.
 - _Signer_ compromise, in particularly compromise of less than _signers.length - N_, does not hinder to execute orders or to propose new ones (including orders which will remove compromised _signers_ from the signers list)
 - _Proposer_ compromise does not hinder to execute orders or to propose new ones (including orders which will remove compromised _proposer_ from the proposers list)
 - Logic of multisignature wallet can not be changed after deploy
