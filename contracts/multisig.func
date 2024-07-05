@@ -84,7 +84,7 @@ int validate_dictionary_sequence(cell dict) impure inline {
 () recv_internal(int balance, int msg_value, cell in_msg_full, slice in_msg_body) {
     slice in_msg_full_slice = in_msg_full.begin_parse();
     int msg_flags = in_msg_full_slice~load_msg_flags();
-    if (is_bounced(msg_flags)) {
+    if (msg_flags & 1) { ;; is bounced
         return ();
     }
     slice sender_address = in_msg_full_slice~load_msg_addr();
