@@ -503,9 +503,12 @@ describe('Multisig', () => {
         const malformed = Dictionary.empty(Dictionary.Keys.Uint(8), Dictionary.Values.Address());
         malformed.set(0, randomAddress());
         malformed.set(2, randomAddress());
+
+        const packDict = (dict: Dictionary<number, Address>) => beginCell().storeDictDirect(dict).endCell();
+
         let updateCell = beginCell().storeUint(Op.actions.update_multisig_params, 32)
                                     .storeUint(4, 8)
-                                    .storeDict(malformed) // signers
+                                    .storeRef(packDict(malformed)) // signers
                                     .storeDict(null) // empty proposers
                          .endCell();
 
@@ -544,10 +547,16 @@ describe('Multisig', () => {
         malformed.set(1, randomAddress());
         malformed.set(2, randomAddress());
 
+        const origSigners = Dictionary.empty(Dictionary.Keys.Uint(8), Dictionary.Values.Address());
+
+        for(let i = 0; i < signers.length; i++) {
+            origSigners.set(i, signers[i]);
+        }
+
         updateCell = beginCell().storeUint(Op.actions.update_multisig_params, 32)
                                 .storeUint(4, 8)
-                                .storeDict(null) // Empty signers? Yes, that is allowed
-                                .storeDict(malformed) // proposers
+                                .storeRef(packDict(origSigners)) // Original signers
+                                .storeDict(malformed) // malformed proposers
                      .endCell();
 
         // All over again
