@@ -1,4 +1,4 @@
-import { Address, beginCell,  Cell, Dictionary, MessageRelaxed, storeMessageRelaxed, Contract, contractAddress, ContractProvider, Sender, SendMode, internal, toNano } from '@ton/core';
+import { Address, beginCell,  Cell, Dictionary, MessageRelaxed, storeMessageRelaxed, Contract, contractAddress, ContractProvider, Sender, SendMode, internal, toNano, DictionaryValue } from '@ton/core';
 import { Op, Params } from "./Constants";
 
 export type Module = {
@@ -23,6 +23,18 @@ export type UpdateRequest   = {
 export type Action = TransferRequest | UpdateRequest;
 export type Order  = Array<Action>;
 
+const AddressValueStrict: DictionaryValue<Address> = {
+    serialize: (address, builder) => {
+        builder.storeAddress(address);
+    },
+    parse: (src) => {
+        const address = src.loadAddress();
+        if(src.remainingBits > 0 || src.remainingRefs > 0) {
+            throw new Error(`Value supposed to contain address only, but extra ${src.remainingBits} bits and ${src.remainingRefs} present!`);
+        }
+        return address;
+    }
+}
 function arrayToCell(arr: Array<Address>): Dictionary<number, Address> {
     let dict = Dictionary.empty(Dictionary.Keys.Uint(8), Dictionary.Values.Address());
     for (let i = 0; i < arr.length; i++) {
@@ -42,7 +54,7 @@ function moduleArrayToCell(arr: Array<Module>) {
 function cellToArray(addrDict: Cell | null) : Array<Address>  {
     let resArr: Array<Address> = [];
     if(addrDict !== null) {
-        const dict = Dictionary.loadDirect(Dictionary.Keys.Uint(8), Dictionary.Values.Address(), addrDict);
+        const dict = Dictionary.loadDirect(Dictionary.Keys.Uint(8), AddressValueStrict, addrDict);
         resArr = dict.values();
     }
     return resArr;
@@ -259,11 +271,23 @@ export class Multisig implements Contract {
     }
 
     async getMultisigData(provider: ContractProvider) {
+        let signers: Address[];
+        let proposers: Address[];
         const { stack } = await provider.get("get_multisig_data", []);
         const nextOrderSeqno = stack.readBigNumber();
         const threshold = stack.readBigNumber();
-        const signers = cellToArray(stack.readCellOpt());
-        const proposers = cellToArray(stack.readCellOpt());
+        try {
+            signers = cellToArray(stack.readCellOpt());
+        }
+        catch(e) {
+            throw new Error("Signers dictionary is malformed: " + e);
+        }
+        try {
+            proposers = cellToArray(stack.readCellOpt());
+        }
+        catch(e) {
+            throw new Error("Proposers dictionary is malformed: " + e);
+        }
         return { nextOrderSeqno, threshold, signers, proposers};
     }
 }
