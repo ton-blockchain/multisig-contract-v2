@@ -8,9 +8,9 @@ Each **Order** may contain arbitrary number of actions: outgoing messages and up
 >
 > UI and other tools for working with multisig must fully parse the contents of orders and clearly report all actions that will be performed by the order. Such tools should also explicitly report parsing errors or actions of an unknown type.
 >
-> Singers must approve order only after fully reading order contents.
+> Signers must approve order only after fully reading order contents.
 
-> ⚠️ The multisig UI should display all created and unexecuted orders (these can be found in outgoing messages from multisig), as well as the match of their list of signers with the current list of singers of multisig, so that users clearly see all active orders that can be executed.
+> ⚠️ The multisig UI should display all created and unexecuted orders (these can be found in outgoing messages from multisig), as well as the match of their list of signers with the current list of signers of multisig, so that users clearly see all active orders that can be executed.
 
 Parameters, such as threshold N, list of _signers_ and other can only be updated by consensus of current N-of-M owners.
 
