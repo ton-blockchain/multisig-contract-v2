@@ -80,7 +80,7 @@ use Toncenter API:
 API_KEY can be obtained on https://toncenter.com or https://testnet.toncenter.com
 
 
-## Notes:
+## Notes
 
 - Threshold must be > 0 and <= signers_num.
 
@@ -91,3 +91,11 @@ API_KEY can be obtained on https://toncenter.com or https://testnet.toncenter.co
 
 - `approve_accepted` auxiliary notification is not sent if the order is initialized and executed immediately (approve_on_init with threshold = 1).
 
+## Security
+
+The multisig contract has been created by TON Core team and audited by security companies:
+
+- Zellic: [Audit Report](https://github.com/ton-blockchain/multisig-contract-v2/blob/main/audits/Multisig_Zellic_Audit_Report.pdf)
+- Trail of Bits: [Audit Report](https://github.com/ton-blockchain/multisig-contract-v2/blob/main/audits/202403TON_Foundation_Multisignature_Wallet_Report_+_Fix_Review.pdf)
+
+Feel free to review these reports for a detailed understanding of the contract's security measures.
