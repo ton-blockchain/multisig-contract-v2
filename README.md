@@ -95,7 +95,7 @@ API_KEY can be obtained on https://toncenter.com or https://testnet.toncenter.co
 
 The vesting contract has been created by TON Core team and audited by security companies:
 
-- Zellic: [Audit Report](https://github.com/ton-blockchain/multisig-contract-v2/blob/main/audits/Multisig - Zellic Audit Report.pdf)
+- Zellic: [Audit Report](https://github.com/ton-blockchain/multisig-contract-v2/blob/main/audits/Multisig_Zellic_Audit_Report.pdf)
 - Trail of Bits: [Audit Report](https://github.com/ton-blockchain/multisig-contract-v2/blob/main/audits/202403TON_Foundation_Multisignature_Wallet_Report_+_Fix_Review.pdf)
 
 Feel free to review these reports for a detailed understanding of the contract's security measures.
